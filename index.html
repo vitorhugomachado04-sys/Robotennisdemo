@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Tênis 3D – Campanha 5 Fases (rev F)</title>
+<title>Tênis 3D – Campanha 10 Fases (rev F)</title>
 <style>
   html,body{margin:0;height:100%;background:#0e9f4b;font-family:system-ui,Segoe UI,Roboto,Arial}
   #ui{position:fixed;inset:0;pointer-events:none;display:flex;flex-direction:column;justify-content:space-between}
@@ -47,7 +47,7 @@
 <body>
 <div id="ui">
   <div class="hud" id="help">
-    <div id="banner">Fase 1/5 • Melhor de 3 games • Mover: WASD (invertido) • Mirar: A/D • J Topspin • K Slice • L Lob • I Flat • P Pausa</div>
+    <div id="banner">Fase 1/10 • Melhor de 3 games • Mover: WASD (invertido) • Mirar: A/D • J Topspin • K Slice • L Lob • I Flat • O Drop • P Pausa</div>
     <div id="score">Games 0–0 | Pontos: 0–0 | Saque: Você (direita)</div>
     <div id="shot">Golpe: —</div>
   </div>
@@ -85,6 +85,8 @@ const SERVE_X = HALF_W*0.35;
 
 // Física e controle
 let PLAYER_SPEED = 5.5, CPU_SPEED = 6.6;
+let playerType = 'launcher';
+function applyPlayerSpeed(){ PLAYER_SPEED = (playerType==='white' || playerType==='big' || playerType==='lilas') ? 5.5*2 : 5.5; }
 const PLAYER_REACH = 1.6, CPU_REACH=1.9;
 const GRAV=9.8;
 
@@ -95,11 +97,16 @@ const SURF={
   clay:{ restitution:0.60, postFric:0.86, courtColor:0xcc6c3c, apron:0x8b3e1e, bg:0x8b3e1e },
   usopen:{ restitution:0.56, postFric:0.98, courtColor:0x0a4abf, apron:0x2d7d2e, bg:0x1e3a8a},
   laver:{ restitution:0.55, postFric:0.99, courtColor:0x4aa3ff, apron:0x8bc34a, bg:0x2f5fb5},
-  montpellier:{ restitution:0.56, postFric:0.98, courtColor:0x465c99, apron:0xff6ea8, bg:0xff5c9a }
+  montpellier:{ restitution:0.56, postFric:0.98, courtColor:0x465c99, apron:0xff6ea8, bg:0xff5c9a },
+  greenPurple:{ restitution:0.56, postFric:0.98, courtColor:0x9b5de5, apron:0x90ee90, bg:0x90ee90 },
+  greyArena:{ restitution:0.56, postFric:0.98, courtColor:0xd3d3d3, apron:0x7a7a7a, bg:0x7a7a7a },
+  greenDual:{ restitution:0.56, postFric:0.98, courtColor:0x90ee90, apron:0x90ee90, bg:0x90ee90 },
+  blueDual:{ restitution:0.56, postFric:0.98, courtColor:0x87CEFA, apron:0x87CEFA, bg:0x87CEFA },
+  pinkDual:{ restitution:0.56, postFric:0.98, courtColor:0xFFC0CB, apron:0xFFC0CB, bg:0xFFC0CB }
 };
 
 // CPU velocidade extra por fase (F5 reduzida)
-const CPU_SPEED_MULT = {1:1.0, 2:1.5, 3:1.6, 4:1.9, 5:2.0};
+const CPU_SPEED_MULT = {1:1.0, 2:1.5, 3:1.6, 4:1.9, 5:2.0, 6:2.0, 7:2.0};
 
 // ================== RENDERER / SCENE ==================
 const renderer=new THREE.WebGLRenderer({antialias:true});
@@ -201,8 +208,27 @@ function createWhiteMachine(){
   shadow.rotation.x=-Math.PI/2; shadow.position.y=0.002; g.add(shadow);
   return g;
 }
+function createPurpleMachine(){
+  const g=new THREE.Group();
+  const body=new THREE.Mesh(new THREE.BoxGeometry(1.0,1.6,0.75), new THREE.MeshPhongMaterial({color:0x9b5de5}));
+  body.position.y=1.6/2; g.add(body);
+  const tube=new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.12,0.5,20), new THREE.MeshPhongMaterial({color:0xddddff}));
+  tube.rotation.z=Math.PI/2; tube.position.set(0,1.25,0.42); g.add(tube);
+  const detail=new THREE.Mesh(new THREE.BoxGeometry(0.9,0.16,0.05), new THREE.MeshPhongMaterial({color:0x4c1d95}));
+  detail.position.set(0,1.05,0.42); g.add(detail);
+  const wheelMat = new THREE.MeshPhongMaterial({color:0x111});
+  for(const sx of [-0.38, 0.38]){ const w=new THREE.Mesh(new THREE.TorusGeometry(0.26,0.06,10,20),wheelMat); w.rotation.x=Math.PI/2; w.position.set(sx,0.2,-0.3); g.add(w); }
+  const handle=new THREE.Mesh(new THREE.BoxGeometry(0.1,1.0,0.06), new THREE.MeshPhongMaterial({color:0x999}));
+  handle.position.set(0,1.9,-0.28); g.add(handle);
+  const shadow=new THREE.Mesh(new THREE.CircleGeometry(0.65,24), new THREE.MeshBasicMaterial({color:0x000,transparent:true,opacity:0.26}));
+  shadow.rotation.x=-Math.PI/2; shadow.position.y=0.002; g.add(shadow);
+  return g;
+}
 
+
+let cpuL=null, cpuR=null, phase8Rush=null, phase8ServerTurn='L', lastYouShotType='';
 let player1=createLauncher(0x111216,0x3db2ff);
+    applyPlayerSpeed();
 let player2=createLauncher(0x111216,0x35c266);
 scene.add(player1,player2);
 player1.position.set(0,0,-PLAYER_BASE_Z); player2.position.set(0,0,PLAYER_BASE_Z); player2.rotation.y=Math.PI;
@@ -288,15 +314,15 @@ addEventListener('keydown', (e)=>{
     cheatBuffer = (cheatBuffer + ch).slice(-20);
     if(cheatBuffer.includes("ALL-AROUND") && phase===1 && !cheatMenu){
       cheatMenu = true;
-      bannerEl.textContent = "ALL-AROUND ativado • Pressione 1–5 para escolher a fase inicial";
+      bannerEl.textContent = "ALL-AROUND ativado • Pressione 1–9 (ou 0 para F10) para escolher a fase inicial";
     }
   }
   if(cheatMenu){
-    if(k>='1' && k<='5'){
-      const num = parseInt(k,10);
+    if((k>='1' && k<='9') || k==='0'){
+      const num = (k==='0') ? 10 : parseInt(k,10);
       setPhase(num);
       cheatMenu=false;
-      bannerEl.textContent = `Fase ${phase}/5 • Selecionada via ALL-AROUND`;
+      bannerEl.textContent = `Fase ${phase}/10 • Selecionada via ALL-AROUND`;
     }
   }
 });
@@ -341,66 +367,167 @@ let allowedShotsPlayer = {top:true, slice:false, lob:false, flat:false};
 let allowedShotsCPU     = {top:true, slice:true, lob:false, flat:false};
 let currentSurface = SURF.grass;
 let cpuFlatLeft = 3;
-let playerFlatLeft = 1;
+let playerFlatLeft = (phase===10? 9999 : 1);
+let cpuDropLeft = 0;
+function cpuDropPerGame(){
+  if(phase===7) return 2; // Fase 7: 2 drops por game
+  return 0;
+}
+
+function cpuFlatPerGame(){
+  if(phase===4) return 1;
+  if(phase===5) return 1;
+  if(phase===7) return 2;
+  return 3;
+}
 let bounceCount = 0;
+let rallyHits=0, plannedCpuMissAt=Infinity, cpuMissArmed=false;
 let serveDelayUntil = 0; // 1.5s antes do CPU sacar
 let serveAttempt = 1; // 1º ou 2º serviço
 
 function setPhase(p){
-  // Ajuste de velocidade do jogador por fase (player 2x nas fases 4 e 5)
-  if (p === 4 || p === 5) {
-    PLAYER_SPEED = 5.5 * 2;
-  } else {
-    PLAYER_SPEED = 5.5;
-  }
-
   phase=p;
   scene.remove(player1); scene.remove(player2);
+  if(typeof cpuL!=='undefined' && cpuL){ scene.remove(cpuL); cpuL=null; }
+  if(typeof cpuR!=='undefined' && cpuR){ scene.remove(cpuR); cpuR=null; }
+
   if(phase===1){
+    playerType='launcher';
     buildCourt(SURF.grass); currentSurface=SURF.grass;
     player1=createLauncher(0x111216,0x3db2ff);
     player2=createLauncher(0x111216,0x35c266);
-    allowedShotsPlayer={top:true, slice:false, lob:false, flat:false};
-    allowedShotsCPU={top:true, slice:true, lob:false, flat:false};
-    bannerEl.textContent="Fase 1/5 • Grama • Você: Azul (Top) • Oponente: Verde (Top+Slice)";
+    allowedShotsPlayer={top:true, slice:false, lob:false, flat:false, drop:false};
+    allowedShotsCPU   ={top:true, slice:true,  lob:false, flat:false, drop:false};
+    bannerEl.textContent="Fase 1/10 • Grama • Você: Azul (Top) • Oponente: Verde (Top+Slice)";
   }else if(phase===2){
+    playerType='launcher';
     buildCourt(SURF.hardAO); currentSurface=SURF.hardAO;
     player1=createLauncher(0x111216,0x35c266);
     player2=createLauncher(0x111216,0x3db2ff);
-    allowedShotsPlayer={top:true, slice:true, lob:false, flat:false};
-    allowedShotsCPU={top:true, slice:false, lob:false, flat:false};
-    bannerEl.textContent="Fase 2/5 • Quadra dura (AO) • Você: Verde (Top+Slice) • Oponente: Azul (Top) [CPU 1.5×]";
+    allowedShotsPlayer={top:true, slice:true,  lob:false, flat:false, drop:false};
+    allowedShotsCPU   ={top:true, slice:false, lob:false, flat:false, drop:false};
+    bannerEl.textContent="Fase 2/10 • Quadra dura (AO) • Você: Verde (Top+Slice) • Oponente: Azul (Top) [CPU 1.5×]";
   }else if(phase===3){
+    playerType='launcher';
     buildCourt(SURF.clay); currentSurface=SURF.clay;
     player1=createLauncher(0x111216,0x35c266);
     player2=createBigMachine(0x202020,0xffa030);
-    allowedShotsPlayer={top:true, slice:true, lob:false, flat:false};
-    allowedShotsCPU={top:true, slice:true, lob:true, flat:false};
-    bannerEl.textContent="Fase 3/5 • Saibro • Você: Verde (Top+Slice) • Oponente: Robôzão (Top+Slice+Lob) [CPU 2×]";
+    allowedShotsPlayer={top:true, slice:true,  lob:false, flat:false, drop:false};
+    allowedShotsCPU   ={top:true, slice:true,  lob:true,  flat:false, drop:false};
+    bannerEl.textContent="Fase 3/10 • Saibro • Você: Verde (Top+Slice) • Oponente: Robôzão (Top+Slice+Lob) [CPU 2×]";
   }else if(phase===4){
+    playerType='big';
     buildCourt(SURF.usopen); currentSurface=SURF.usopen;
-    player1=createBigMachine(0x111216,0x111111); // preta (Top+Slice+Lob+Flat)
-    player2=createWhiteMachine();                 // branca (Top+Flat)
-    allowedShotsPlayer={top:true, slice:true, lob:true, flat:true};
-    allowedShotsCPU={top:true, slice:false, lob:false, flat:true};
-    bannerEl.textContent="Fase 4/5 • US Open • Você: Preta (Top+Slice+Lob+Flat) • Oponente: Branca (Top+Flat 3.5×) [CPU 2.0×]";
-  }else{
+    player1=createBigMachine(0x111216,0x111111);
+    player2=createWhiteMachine();
+    allowedShotsPlayer={top:true, slice:true,  lob:true,  flat:true,  drop:false};
+    allowedShotsCPU   ={top:true, slice:true,  lob:false, flat:true,  drop:false};
+    bannerEl.textContent="Fase 4/10 • US Open • Você: Preta (Top+Slice+Lob+Flat) • Oponente: Branca (Top+Slice+Flat) [CPU 2.0×]";
+  }else if(phase===5){
+    playerType='white';
     buildCourt(SURF.montpellier); currentSurface=SURF.montpellier;
     player1=createWhiteMachine(); player2=createWhiteMachine();
-    allowedShotsPlayer={top:true, slice:false, lob:false, flat:true};
-    allowedShotsCPU={top:true, slice:false, lob:false, flat:true};
-    bannerEl.textContent="Fase 5/5 • Montpellier • Ambos: Máquina Branca (Top+Flat 3.5×) [CPU 2.0× | Flat 1x/game (CPU)]";
+    allowedShotsPlayer={top:true, slice:true,  lob:false, flat:true,  drop:false};
+    allowedShotsCPU   ={top:true, slice:true,  lob:false, flat:true,  drop:false};
+    bannerEl.textContent="Fase 5/10 • Montpellier • Ambos: Máquina Branca (Top+Slice+Flat) [Flat CPU 1×/game]";
+  }else if(phase===6){
+    playerType='white';
+    buildCourt(SURF.greenPurple); currentSurface=SURF.greenPurple;
+    player1=createWhiteMachine(); player2=createWhiteMachine();
+    allowedShotsPlayer={top:true, slice:true,  lob:false, flat:true,  drop:false};
+    allowedShotsCPU   ={top:true, slice:true,  lob:false, flat:true,  drop:false};
+    bannerEl.textContent="Fase 6/10 • Verde (exterior) + Lilás (interior) • Ambos: Máquina Branca (Top+Slice+Flat) [Flat CPU 2×/game]";
+  }else if(phase===7){
+    playerType='lilas';
+    buildCourt(SURF.greyArena); currentSurface=SURF.greyArena;
+    player1=createPurpleMachine(); player2=createPurpleMachine();
+    allowedShotsPlayer={top:true, slice:true,  lob:true,  flat:false, drop:true};
+    allowedShotsCPU   ={top:true, slice:true,  lob:true,  flat:false, drop:true};
+    bannerEl.textContent="Fase 7/10 • Arena Cinza • Ambos: Máquina Lilás (Top+Slice+Lob+Drop)";
+  }else if(phase===8){
+    playerType='lilas';
+    buildCourt(SURF.greenDual); currentSurface=SURF.greenDual;
+    player1=createPurpleMachine();
+    // duas CPUs azuis (esq/dir)
+    cpuL=createLauncher(0x111216,0x3db2ff);
+    cpuR=createLauncher(0x111216,0x3db2ff);
+    player2=cpuR;
+    const baseZ=(COURT_LENGTH/2 - 0.8);
+    cpuL.position.set(-HALF_W+0.6,0,baseZ);
+    cpuR.position.set(+HALF_W-0.6,0,baseZ);
+    cpuL.rotation.y=Math.PI; cpuR.rotation.y=Math.PI;
+    allowedShotsPlayer={top:true, slice:true, lob:true, flat:false, drop:true};
+    allowedShotsCPU   ={top:true, slice:false, lob:false, flat:false, drop:false};
+    bannerEl.textContent="Fase 8/10 • Duas CPUs (esq/dir) • Você: Lilás • Saque 1.5× • Sem Flat (CPU)";
+    scene.add(cpuL); scene.add(cpuR);
   }
+  else if(phase===9){
+  // Duas CPUs verdes (esq/dir); jogador: lilás; mesmo conceito da F8
+  playerType='lilas';
+  buildCourt(SURF.blueDual); currentSurface=SURF.blueDual;
+  player1=createPurpleMachine();
+  // CPUs verdes
+  cpuL = createLauncher(0x111216,0x35c266);
+  cpuR = createLauncher(0x111216,0x35c266);
+  player2 = cpuR;
+  const baseZ = (COURT_LENGTH/2 - 0.8);
+  cpuL.position.set(-HALF_W+0.6,0,baseZ);
+  cpuR.position.set(+HALF_W-0.6,0,baseZ);
+  cpuL.rotation.y=Math.PI; cpuR.rotation.y=Math.PI;
+  allowedShotsPlayer={top:true, slice:true, lob:true, flat:false, drop:true};
+  // CPUs nesta fase: sem flat (mantém topspin seguro)
+  allowedShotsCPU   ={top:true, slice:false, lob:false, flat:false, drop:false};
+  phase8ServerTurn='L'; // começa sacando pelo da esquerda
+  bannerEl.textContent="Fase 9/10 • Duas CPUs Verdes (esq/dir) • Você: Lilás (Top+Slice+Lob+Drop) • Saque 1.5× • Sem Flat (CPU)";
+  scene.add(cpuL); scene.add(cpuR);
+}
+  else if(phase===10){
+  // Duas CPUs Brancas (esq/dir); jogador: Branca; sem flat na CPU; player com flat ilimitado
+  playerType='white';
+  buildCourt(SURF.pinkDual); currentSurface=SURF.pinkDual;
+  // Player e CPUs
+  player1 = createWhiteMachine();
+  cpuL = createWhiteMachine();
+  cpuR = createWhiteMachine();
+  player2 = cpuR;
+  const baseZ = (COURT_LENGTH/2 - 0.8);
+  cpuL.position.set(-HALF_W+0.6,0,baseZ);
+  cpuR.position.set(+HALF_W-0.6,0,baseZ);
+  cpuL.rotation.y=Math.PI; cpuR.rotation.y=Math.PI;
+  // Shots
+  allowedShotsPlayer={top:true, slice:true, lob:false, flat:true, drop:false};
+  allowedShotsCPU   ={top:true, slice:true, lob:false, flat:false, drop:false};
+  phase8ServerTurn='L'; // começa sacando pela esquerda
+  bannerEl.textContent="Fase 10/10 • Duas CPUs Brancas (esq/dir) • Você: Branca (Flat ilimitado) • Sem Flat (CPU)";
+  scene.add(cpuL); scene.add(cpuR);
+}else{
+    // fallback
+    playerType='launcher';
+    buildCourt(SURF.grass); currentSurface=SURF.grass;
+    player1=createLauncher(0x111216,0x3db2ff);
+    player2=createLauncher(0x111216,0x35c266);
+    allowedShotsPlayer={top:true, slice:false, lob:false, flat:false, drop:false};
+    allowedShotsCPU   ={top:true, slice:true,  lob:false, flat:false, drop:false};
+    bannerEl.textContent="Fase 1/10 • Grama • Você: Azul (Top) • Oponente: Verde (Top+Slice)";
+  }
+
+  if(typeof applyPlayerSpeed==='function') applyPlayerSpeed();
+
   scene.add(player1,player2);
   player1.position.set(0,0,-PLAYER_BASE_Z); player2.position.set(0,0,PLAYER_BASE_Z); player2.rotation.y=Math.PI;
+  if((phase===8 || phase===9 || phase===10) && cpuL && cpuR){ const baseZ=(COURT_LENGTH/2 - 0.8); cpuL.position.set(-HALF_W+0.6,0,baseZ); cpuR.position.set(+HALF_W-0.6,0,baseZ); cpuL.rotation.y=Math.PI; cpuR.rotation.y=Math.PI; }
   resetMatchScoreKeepPhase();
   buildWhiteMeshNet();
 }
 
 function resetMatchScoreKeepPhase(){
-  server=1; serveRight=true; cpuFlatLeft = (phase===4 || phase===5) ? 1 : 3;
+  server=1; serveRight=true; cpuFlatLeft = cpuFlatPerGame(); cpuDropLeft = cpuDropPerGame(); cpuDropLeft = cpuDropPerGame(); cpuDropLeft = cpuDropPerGame();
   pointsYou=pointsCPU=0; gamesYou=gamesCPU=0; matchOver=false;
-  updateScoreText(); resetForNextPoint();
+  updateScoreText();
+  // Reset contagem de trocas e erro não-forçado (F8=5, F9=10, F10=15)
+  rallyHits=0;
+  plannedCpuMissAt = (phase===8 ? 5 : (phase===9 ? 10 : (phase===10 ? 15 : Infinity)));
+  cpuMissArmed = (phase===8||phase===9||phase===10); resetForNextPoint();
 }
 
 // ================== PLACAR / UI ==================
@@ -415,7 +542,7 @@ function fmtPoints(){
 function updateScoreText(){
   const whoServes = (server===1)?'Você':'CPU';
   const lado = serveRight ? 'direita' : 'esquerda';
-  scoreEl.textContent = `Fase ${phase}/5 | Games ${gamesYou}–${gamesCPU} (melhor de 3) | Pontos: ${fmtPoints()} | Saque: ${whoServes} (${lado})`;
+  scoreEl.textContent = `Fase ${phase}/10 | Games ${gamesYou}–${gamesCPU} (melhor de 3) | Pontos: ${fmtPoints()} | Saque: ${whoServes} (${lado})`;
 }
 
 // ================== UTIL / MIRA ==================
@@ -442,6 +569,14 @@ function aimTarget(fromMesh,type){
     return {x:clampInsideSingles(targetX), z:targetZ, minApex, dir:0};
   }
 
+
+  if(type==='Drop'){
+    const near = (fromMesh===player1);
+    const targetZ = near ? +(Math.random()*0.5 + 1.2) : -(Math.random()*0.5 + 1.2); // um pouco mais longe pra evitar rede
+    let targetX = clampInsideSingles(ball.position.x + (Math.random()-.5)*0.5);
+    const minApex = NET_HEIGHT + 0.32; // margem maior pra não pegar na rede
+    return {x:targetX, z:targetZ, minApex, dir:0};
+  }
   const near=(fromMesh===player1); const targetZ = near ? +(COURT_LENGTH/2 - 3.8) : -(COURT_LENGTH/2 - 3.8);
   let dir=0; if(keys.has('a')) dir=-1; else if(keys.has('d')) dir=+1;
   const perspective = near ? 1 : -1;
@@ -510,7 +645,7 @@ function inVolleyZone(ofMesh){
 }
 
 // ================== GOLPES ==================
-const SHOT_TOP='Topspin', SHOT_SLICE='Slice', SHOT_LOB='Lob', SHOT_FLAT='Flat';
+const SHOT_TOP='Topspin', SHOT_SLICE='Slice', SHOT_LOB='Lob', SHOT_FLAT='Flat', SHOT_DROP='Drop';
 
 function strike(fromMesh,shotType){
   const isP = (fromMesh===player1);
@@ -519,8 +654,9 @@ function strike(fromMesh,shotType){
   if( shotType===SHOT_LOB   && !allow.lob)   return;
   if( shotType===SHOT_TOP   && !allow.top)   return;
   if( shotType===SHOT_FLAT  && !allow.flat)  return;
+  if( shotType===SHOT_DROP  && !allow.drop)  return;
 
-  if(!isP && (phase===4 || phase===5) && shotType===SHOT_FLAT){ if(cpuFlatLeft<=0) return; cpuFlatLeft--; }
+  if(!isP && (phase===4 || phase===7) && shotType===SHOT_FLAT){ if(cpuFlatLeft<=0) return; cpuFlatLeft--; }
 
   if(isServe){ const who=isP?1:2; if(who!==server) return; }
   else{ if(isP && !canHit(fromMesh,false)) return; if(!isP && !canHit(fromMesh,true)) return; }
@@ -528,14 +664,82 @@ function strike(fromMesh,shotType){
   /* CPU FLAT LIMIT GUARD */
   if(shotType===SHOT_FLAT && fromMesh!==player1 && cpuFlatLeft<=0){ shotType = SHOT_TOP; }
   /* PLAYER FLAT LIMIT */
-  if(shotType===SHOT_FLAT && fromMesh===player1 && playerFlatLeft<=0){ shotType = SHOT_TOP; }
-  const tgt=aimTarget(fromMesh,shotType);
+  if(shotType===SHOT_FLAT && fromMesh===player1 && playerFlatLeft<=0 && phase!==10){ shotType = SHOT_TOP; }
+  
+  // Contagem e erro programado na F8
+  if(!isServe){ rallyHits++; }
+  let forceCpuMiss = false;
+  if((phase===8||phase===9||phase===10) && !isP && !isServe){
+    if(cpuMissArmed && rallyHits >= plannedCpuMissAt){ forceCpuMiss=true; cpuMissArmed=false; }
+  }
+const tgt=aimTarget(fromMesh,shotType);
   const contact=contactPoint(fromMesh);
+
+  // Volley mode: qualquer golpe batido dentro do quadradinho (área de saque) vira voleio
+  let volleyMode = false;
+  {
+    const inBoxX = Math.abs(contact.x) <= HALF_W + 0.01;
+    if(fromMesh===player1){
+      if(contact.z > -(SERVICE_DIST+0.25) && contact.z < -0.05) volleyMode = true;
+    }else{
+      if(contact.z <  (SERVICE_DIST+0.25) && contact.z >  0.05) volleyMode = true;
+    }
+  }
+
   /* contact height tweak */
   if(isServe){ contact.y += 0.35; } // serve higher release
   if(shotType===SHOT_FLAT && !isServe){ contact.y += 0.18; } // flat rally a bit higher
+  if(shotType===SHOT_DROP){ contact.y += 0.06; }
   let plan=planBallistic(contact,{x:tgt.x,z:tgt.z},tgt.minApex);
-  ball.userData.isServeShot = !!isServe;
+  
+  if((phase===8||phase===9||phase===10) && !isP && !isServe){
+    if(!forceCpuMiss && rallyHits < plannedCpuMissAt){
+      plan = planBallistic(contact,{x: clampInsideSingles(tgt.x*0.92), z: tgt.z}, Math.max(tgt.minApex, NET_HEIGHT+0.14));
+    }else if(forceCpuMiss){
+      const sign = (tgt.x>=0)? +1 : -1;
+      const missX = sign * (HALF_W + 0.35);
+      plan = planWithTime(contact,{x: missX, z: tgt.z}, tgt.minApex);
+    }
+  }
+ball.userData.isServeShot = !!isServe;
+
+    // Garantia de passar a rede em Drops (com ou sem voleio) — robusto
+  if(shotType===SHOT_DROP){
+    for(let i=0;i<6;i++){
+      const vz = plan.vz;
+      if(Math.abs(vz) < 1e-3) break; // evita divisão por zero
+      const tNet = (0 - contact.z) / vz;
+      if(tNet>0 && tNet<plan.t){
+        const yNet = contact.y + plan.vy*tNet - 0.5*GRAV*tNet*tNet;
+        const margin = volleyMode ? (NET_HEIGHT + 0.12) : (NET_HEIGHT + 0.18);
+        if(yNet < margin){
+          // Recalcula mantendo o destino atual previsto desta bola
+          const tx = contact.x + plan.vx*plan.t;
+          const tz = contact.z + plan.vz*plan.t;
+          const newMinApex = Math.max(margin + 0.08, NET_HEIGHT + 0.32);
+          plan = planWithTime(contact,{x:tx, z:tz}, newMinApex);
+          continue;
+        }
+      }
+      break;
+    }
+  }// Ajustes de voleio: trajetória mais baixa e rápida
+  if(volleyMode){
+    // alvo mais agressivo: mantém tgt, mas limita a altura mínima e acelera um pouco
+    const lowApex = NET_HEIGHT + 0.18;
+    if(shotType===SHOT_DROP){
+      // Deixadinha de voleio: cai bem pertinho pós-rede
+      const near = (fromMesh===player1);
+      const zShort = near ? +(Math.random()*0.5 + 0.9) : -(Math.random()*0.5 + 0.9);
+      const xShort = clampInsideSingles(contact.x + (Math.random()-.5)*0.4);
+      plan = planWithTime(contact,{x:xShort,z:zShort}, lowApex);
+      plan.t = Math.max(0.20, plan.t * 0.90);
+    }else{
+      plan = planWithTime(contact,{x:tgt.x,z:tgt.z}, lowApex);
+      plan.t = Math.max(0.18, plan.t * 0.80);
+    }
+  }
+
 
   // Segurança extra: *saque* nunca bate na rede -> acelera até sobrar altura na rede
   if(isServe){
@@ -560,19 +764,22 @@ function strike(fromMesh,shotType){
   // CPU velocidade extra por fase
   if(!isP){
     let mult = CPU_SPEED_MULT[phase] || 1.0;
-    if(isServe && phase===5){ mult = CPU_SPEED_MULT[4] || mult; }
+    if(isServe && phase===7){ mult = CPU_SPEED_MULT[4] || mult; }
     plan = planWithTime(contact,{x:tgt.x,z:tgt.z}, Math.max(0.2, plan.t / mult));
   }
 
-  // FLAT 3.5×
-  if(shotType===SHOT_FLAT){ plan = planWithTime(contact,{x:tgt.x,z:tgt.z}, Math.max(0.2, plan.t / 3.5)); /* DEC PLAYER FLAT */ if(fromMesh===player1){ playerFlatLeft--; } /* DEC CPU FLAT */ if(fromMesh!==player1){ cpuFlatLeft = Math.max(0, (cpuFlatLeft||0)-1); } }
+  // FLAT 3.5× (ajuste fase 6 no saque)
+  if(shotType===SHOT_FLAT){ let flatMult = 3.5; if(isServe && (phase===5 || phase===7)){ flatMult = 2.4; } plan = planWithTime(contact,{x:tgt.x,z:tgt.z}, Math.max(0.2, plan.t / flatMult)); /* DEC PLAYER FLAT */ if(fromMesh===player1){ playerFlatLeft--; } /* DEC CPU FLAT */ if(fromMesh!==player1){ cpuFlatLeft = Math.max(0, (cpuFlatLeft||0)-1); } }
+  // DEC CPU DROP
+  if(shotType===SHOT_DROP && fromMesh!==player1){ cpuDropLeft = Math.max(0, (cpuDropLeft||0)-1); }
 
   // Saque mais rápido (base): 2.0×
-  if(isServe){ plan = planWithTime(contact,{x:tgt.x,z:tgt.z}, Math.max(0.18, plan.t / 2.0)); }
+  if(isServe){ const serveMult = (phase===5 || phase===7) ? 1.25 : ((phase===8||phase===9||phase===10) ? 1.5 : 2.0); plan = planWithTime(contact,{x:tgt.x,z:tgt.z}, Math.max(0.18, plan.t / serveMult)); }
 
+  if(shotType===SHOT_DROP){ plan = planWithTime(contact,{x:tgt.x,z:tgt.z}, Math.min(1.2, plan.t*1.08)); }
   ball.position.copy(contact); ballVel.set(plan.vx,plan.vy,plan.vz);
   ball.userData.spinType = shotType;
-  ball.userData.spin = (shotType===SHOT_LOB)?0.15:(shotType===SHOT_SLICE?-0.35:(shotType===SHOT_FLAT?0.0:+0.6));
+  ball.userData.spin = (shotType===SHOT_LOB)?0.15:(shotType===SHOT_SLICE?-0.35:(shotType===SHOT_FLAT?0.0:(shotType===SHOT_DROP?-0.6:+0.6)));
   ball.userData.postBounce=false;
   ball.userData.checkedFirstBounce=false;
   ball.userData.lastSide = (fromMesh===player1)? 'you':'cpu';
@@ -590,7 +797,73 @@ function strike(fromMesh,shotType){
 }
 
 // ================== CPU ==================
+
+function cpuThinkPhase8(dt){
+  // Saque da CPU: alterna entre R/L e usa cruzado (L->direita, R->esquerda)
+  if(isServe && server===2){
+    const serverMesh = (phase8ServerTurn==='R') ? cpuR : cpuL;
+    if(performance.now() >= serveDelayUntil){
+      const aimKey = (serverMesh===cpuL) ? 'a' : 'd';
+      keys.add(aimKey); strike(serverMesh, SHOT_TOP); keys.delete(aimKey);
+    }
+    return;
+  }
+
+  if(!cpuL || !cpuR){ cpuThink(dt); return; } // fallback
+
+  const baseZ = (COURT_LENGTH/2 - 0.8);
+  const homeL = {x:-HALF_W+0.6, z:baseZ};
+  const homeR = {x:+HALF_W-0.6, z:baseZ};
+
+  // Escolhe quem persegue: por lado da bola
+  let chaser = (ball.position.x < 0) ? cpuL : cpuR;
+  let helper = (chaser===cpuL) ? cpuR : cpuL;
+
+  // Só se mexe quando a bola vem pro lado da CPU (bola indo pra cima, z>0)
+  if(ballVel.z>0){
+    const pred=predictBounce();
+    // limita o alvo ao seu lado
+    let targetX = THREE.MathUtils.clamp(pred.x, -(HALF_W+EXTRA_OUT), (HALF_W+EXTRA_OUT));
+    if(chaser===cpuL) targetX = Math.min(targetX, -0.1);
+    else              targetX = Math.max(targetX, +0.1);
+    let targetZ = Math.min(baseZ, Math.max(0.6, pred.z-0.9));
+
+    // Se último golpe seu foi Drop e a bola vem pra CPU -> somente o chaser sobe
+    if(lastYouShotType==='Drop'){ targetZ = Math.max(0.8, Math.min(SERVICE_DIST-0.2, targetZ)); }
+
+    const dx = targetX - chaser.position.x;
+    const dz = targetZ - chaser.position.z;
+    chaser.position.x += THREE.MathUtils.clamp(dx, -CPU_SPEED*dt, CPU_SPEED*dt);
+    chaser.position.z += THREE.MathUtils.clamp(dz, -CPU_SPEED*dt, CPU_SPEED*dt);
+  }else{
+    // volta pra casa
+    for(const bot of [cpuL,cpuR]){
+      const home = (bot===cpuL)?homeL:homeR;
+      const dx = home.x - bot.position.x;
+      const dz = home.z - bot.position.z;
+      bot.position.x += THREE.MathUtils.clamp(dx, -3.2*dt, 3.2*dt);
+      bot.position.z += THREE.MathUtils.clamp(dz, -3.2*dt, 3.2*dt);
+    }
+  }
+
+  // Batida: quem estiver em alcance primeiro
+  function tryHit(bot){
+    let aimKey = (Math.random()<.5)?'a':'d';
+    if(canHit(bot,true)){ keys.add(aimKey); strike(bot, SHOT_TOP); keys.delete(aimKey); return true; }
+    return false;
+  }
+  if(ballVel.z>0){ if(!tryHit(chaser)) tryHit(helper); }
+
+  // clamps
+  cpuL.position.x = THREE.MathUtils.clamp(cpuL.position.x, -(HALF_W+EXTRA_OUT), 0);
+  cpuR.position.x = THREE.MathUtils.clamp(cpuR.position.x, 0, (HALF_W+EXTRA_OUT));
+  for(const bot of [cpuL,cpuR]){
+    bot.position.z = THREE.MathUtils.clamp(bot.position.z, 0.6, (COURT_LENGTH/2 - 0.6));
+  }
+}
+
 function cpuThink(dt){
+
   if(ballVel.z>0){ 
     const pred = predictBounce();
     const targetX = THREE.MathUtils.clamp(pred.x, -(HALF_W+EXTRA_OUT), (HALF_W+EXTRA_OUT));
@@ -615,6 +888,7 @@ function cpuThink(dt){
   if(allowedShotsCPU.flat && (phase<4 || cpuFlatLeft>0)) options.push(SHOT_FLAT);
 
   let type = options[Math.floor(Math.random()*options.length)] || SHOT_TOP;
+  if((phase===5 || phase===7) && cpuFlatLeft>0 && allowedShotsCPU.flat){ type = SHOT_FLAT; }
   if(phase===3 && allowedShotsCPU.lob){
     const youAtNet = player1.position.z > -(SERVICE_DIST) + 0.4;
     if(youAtNet && Math.random()<0.5) type = SHOT_LOB;
@@ -649,6 +923,7 @@ function handlePlayer(dt){
   if(keys.has('k')){ strike(player1, SHOT_SLICE); keys.delete('k'); }
   if(keys.has('l')){ strike(player1, SHOT_LOB); keys.delete('l'); }
   if(keys.has('i')){ strike(player1, SHOT_FLAT); keys.delete('i'); }
+  if(keys.has('o')){ strike(player1, SHOT_DROP); keys.delete('o'); }
 }
 
 // ================== REGRAS / PLACAR ==================
@@ -659,24 +934,28 @@ function awardPointTo(meshWinner){
     if(Math.abs(pointsYou-pointsCPU)>=2){
       if(pointsYou>pointsCPU) gamesYou++; else gamesCPU++;
       pointsYou=pointsCPU=0; SFX.game();
-      if(phase===4) cpuFlatLeft=1; else if(phase>=5) cpuFlatLeft=3;
+      cpuFlatLeft = cpuFlatPerGame(); cpuDropLeft = cpuDropPerGame(); cpuDropLeft = cpuDropPerGame();
       if(gamesYou>=GAMES_TO_WIN || gamesCPU>=GAMES_TO_WIN){
         matchOver=true; showPhaseEnd(gamesYou>gamesCPU); return;
       }
       startNewGame(); return;
     }
   }
-  updateScoreText(); resetForNextPoint(false);
+  updateScoreText();
+  // Reset contagem de trocas e erro não-forçado (F8=5, F9=10, F10=15)
+  rallyHits=0;
+  plannedCpuMissAt = (phase===8 ? 5 : (phase===9 ? 10 : (phase===10 ? 15 : Infinity)));
+  cpuMissArmed = (phase===8||phase===9||phase===10); resetForNextPoint(false);
 }
 
 function showPhaseEnd(youWin){
   finalTitle.textContent = youWin? `Fase ${phase} vencida! 🏆` : `Fase ${phase} perdida 😅`;
   finalSubtitle.textContent = `Placar: ${gamesYou}–${gamesCPU}`;
-  continueBtn.style.display = youWin && phase<5 ? 'inline-block' : 'none';
-  restartBtn.textContent = youWin && phase<5 ? 'Repetir fase' : 'Jogar de novo';
+  continueBtn.style.display = youWin && phase< 10  ? 'inline-block' : 'none';
+  restartBtn.textContent = youWin && phase< 10  ? 'Repetir fase' : 'Jogar de novo';
   finalEl.style.display='flex';
   (youWin?SFX.win:SFX.lose)();
-  if(youWin && phase===5){
+  if(youWin && phase===10){
     setTimeout(()=>celebrateCampaign(true), 500);
   }
 }
@@ -700,19 +979,24 @@ function celebrateCampaign(youWin){
 
 function resetForNextPoint(){
   rallying=false; isServe=true; serveAttempt=1; clearTrail();
+  if((phase===8||phase===9||phase===10) && server===2){ phase8ServerTurn = (phase8ServerTurn==='R'?'L':'R'); }
   serveRight = !serveRight; // alterna lado do saque a cada ponto
-  placeForServe(); shotEl.textContent='Golpe: —';
+  ((phase===8||phase===9||phase===10)?placeForServePhase8():placeForServe()); shotEl.textContent='Golpe: —';
   updateScoreText();
+  // Reset contagem de trocas e erro não-forçado (F8=5, F9=10, F10=15)
+  rallyHits=0; plannedCpuMissAt=(phase===8?5:(phase===9?10:(phase===10?15:Infinity))); cpuMissArmed=(phase===8||phase===9||phase===10);
   if(server===2){ serveDelayUntil = performance.now() + 1500; } // delay CPU sacar
 }
 function startNewGame(){
   server = (server===1)?2:1;
   
   // Ensure CPU Flat reset per phase
-  cpuFlatLeft = (phase===4 || phase===5) ? 1 : 3;playerFlatLeft = 1;
+  cpuFlatLeft = cpuFlatPerGame(); cpuDropLeft = cpuDropPerGame(); cpuDropLeft = cpuDropPerGame(); cpuDropLeft = cpuDropPerGame(); playerFlatLeft = (phase===10? 9999 : 1);
   serveRight=true; // novo game sempre começa na direita
   serveAttempt=1;
-  updateScoreText(); resetForNextPoint();
+  updateScoreText();
+  // Reset contagem de trocas e plano de erro (F8)
+  rallyHits=0; plannedCpuMissAt=((phase===8||phase===9)? (10+Math.floor(Math.random()*6)) : Infinity); cpuMissArmed=(phase===8||phase===9); resetForNextPoint();
 }
 function resetMatch(){ grandFinal.style.display='none'; setPhase(1); }
 
@@ -739,7 +1023,11 @@ function updateBall(dt){
         if(serveAttempt < 2){
           serveAttempt = 2;
           rallying=false; isServe=true;
-          placeForServe(); updateScoreText();
+          ((phase===8||phase===9||phase===10)?placeForServePhase8():placeForServe()); updateScoreText();
+  // Reset contagem de trocas e erro não-forçado (F8=5, F9=10, F10=15)
+  rallyHits=0;
+  plannedCpuMissAt = (phase===8 ? 5 : (phase===9 ? 10 : (phase===10 ? 15 : Infinity)));
+  cpuMissArmed = (phase===8||phase===9||phase===10);
           if(server===2){ serveDelayUntil = performance.now() + 1500; }
         }else{
           awardPointTo(receiver);
@@ -755,7 +1043,21 @@ function updateBall(dt){
       bounceCount = (bounceCount||0) + 1;
       if(!ball.userData.checkedFirstBounce){
         ball.userData.checkedFirstBounce=true;
-        if(!firstBounceIsIn()){ awardPointTo(receiver); return; }
+        if(!firstBounceIsIn()){
+          if(ball.userData.isServeShot){
+            if(serveAttempt===1){
+              serveAttempt=2; SFX.fault();
+              isServe=true; rallying=false; clearTrail();
+              ((phase===8||phase===9||phase===10)?placeForServePhase8():placeForServe());
+              serveDelayUntil = performance.now() + 1200;
+              return;
+            }else{
+              awardPointTo(receiver); return;
+            }
+          }else{
+            awardPointTo(receiver); return;
+          }
+        }
       }else{ awardPointTo(hitter); return; }
       ball.position.y=BALL_RADIUS; ballVel.y*=-currentSurface.restitution;
       if(!ball.userData.postBounce){
@@ -771,7 +1073,29 @@ function updateBall(dt){
 }
 
 // ================== SAQUE / LOOP ==================
+
+function placeForServePhase8(){
+  const baseZ = (COURT_LENGTH/2 - 0.8);
+  // Homes (parados nos cantos)
+  if(cpuL){ cpuL.position.set(-HALF_W+0.6,0,baseZ); cpuL.rotation.y=Math.PI; }
+  if(cpuR){ cpuR.position.set(+HALF_W-0.6,0,baseZ); cpuR.rotation.y=Math.PI; }
+
+  if(server===1){
+    player1.position.x = serveRight ? +SERVE_X : -SERVE_X;
+    player1.position.z = -(COURT_LENGTH/2 - 0.8);
+    ball.position.set(player1.position.x,1.0,-PLAYER_BASE_Z+1.2);
+    hitter=null; receiver=player2;
+  }else{
+    const serverMesh = (phase8ServerTurn==='R') ? cpuR : cpuL;
+    const xPos = (serverMesh===cpuR) ? +SERVE_X : -SERVE_X;
+    serverMesh.position.x = xPos; serverMesh.position.z = baseZ;
+    ball.position.set(serverMesh.position.x,1.0, PLAYER_BASE_Z-1.2);
+    hitter=null; receiver=player1;
+  }
+  ballVel.set(0,0,0); bounceCount=0;
+}
 function placeForServe(){
+
   const xDeuceYou = +SERVE_X, xAdYou = -SERVE_X;
   const xDeuceCPU = -SERVE_X, xAdCPU = +SERVE_X;
   if(server===1){
@@ -797,7 +1121,7 @@ let last=performance.now();
 function tick(now){
   if(paused){ requestAnimationFrame(tick); return; }
   const dt=Math.min(0.033,(now-last)/1000); last=now;
-  handlePlayer(dt); cpuThink(dt); updateBall(dt);
+  handlePlayer(dt); ((phase===8||phase===9||phase===10)?cpuThinkPhase8(dt):cpuThink(dt)); updateBall(dt);
   // Trail sampling & fade
   if(rallying){ trailAcc += dt; if(trailAcc > 0.016){ addTrailSample(); trailAcc = 0; } }
   fadeTrail(dt);
@@ -872,7 +1196,7 @@ setPhase(1);
   <div class="inner">
     <h1>ROBOTENIS</h1>
     <p>Pressione <kbd>ENTER</kbd> para começar • Pressione <kbd>SHIFT</kbd> para ver os controles</p>
-<div id="controlsPanel"><h2>🎮 Controles do RoboTennis 🎾</h2><div class="sec"><strong>Movimento do Jogador</strong><ul><li><strong>WASD</strong> → controla o jogador</li></ul></div><div class="sec"><strong>Golpes</strong><ul><li><strong>J</strong> → Topspin</li><li><strong>K</strong> → Slice</li><li><strong>L</strong> → Lob</li><li><strong>I</strong> → Flat</li></ul></div><div class="sec"><strong>Câmera</strong><ul><li><strong>Espaço</strong> → alterna a câmera (1ª pessoa ↔ aérea)</li></ul></div><div class="sec"><strong>Tipos de Máquinas</strong><ul><li><strong>Azul</strong> → Topspin</li><li><strong>Verde</strong> → Topspin e Slice</li><li><strong>Preta</strong> → Topspin, Flat, Slice e Lob</li><li><strong>Branca</strong> → Topspin, Flat, Slice e Lob</li></ul></div><p style="margin-top:10px;opacity:.9"><em>Pressione <strong>SHIFT</strong> novamente para fechar</em></p></div>
+<div id="controlsPanel"><h2>🎮 Controles do RoboTennis 🎾</h2><div class="sec"><strong>Movimento do Jogador</strong><ul><li><strong>WASD</strong> → controla o jogador</li></ul></div><div class="sec"><strong>Golpes</strong><ul><li><strong>J</strong> → Topspin</li><li><strong>K</strong> → Slice</li><li><strong>L</strong> → Lob</li><li><strong>I</strong> → Flat</li><li><strong>O</strong> → Drop</li></ul></div><div class="sec"><strong>Câmera</strong><ul><li><strong>Espaço</strong> → alterna a câmera (1ª pessoa ↔ aérea)</li></ul></div><div class="sec"><strong>Tipos de Máquinas</strong><ul><li><strong>Azul</strong> → Topspin</li><li><strong>Verde</strong> → Topspin e Slice</li><li><strong>Preta</strong> → Topspin, Flat, Slice e Lob</li><li><strong>Branca</strong> → Topspin, Flat, Slice e Lob</li><li><strong>Lilás</strong> → Topspin, Slice, Lob e Drop</li></ul></div><p style="margin-top:10px;opacity:.9"><em>Pressione <strong>SHIFT</strong> novamente para fechar</em></p></div>
   </div>
 </div>
 
