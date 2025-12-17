@@ -4,6 +4,10 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Tênis 3D – Campanha 10 Fases (rev F)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap" rel="stylesheet">
+
 <style>
   html,body{margin:0;height:100%;background:#0e9f4b;font-family:system-ui,Segoe UI,Roboto,Arial}
   #ui{position:fixed;inset:0;pointer-events:none;display:flex;flex-direction:column;justify-content:space-between}
@@ -20,21 +24,29 @@
   #final h1,#grandfinal h1{font-size:42px;margin:0 0 6px 0}
   #final p,#grandfinal p{margin:4px 0 12px 0;font-size:18px;opacity:.9}
   #final .buttons,#grandfinal .buttons{display:flex;gap:10px}
-  #final button,#grandfinal button{pointer-events:auto;background:#10b981;border:0;color:#042; font-weight:800;padding:10px 16px;border-radius:10px;cursor:pointer}
+  #final button,#grandfinal button{pointer-events:auto;background:#10b981;border:0;color:#042; font-weight:800;padding:10px 16px;border-radius:10px;cursor:pointer; font-family:'Bebas Neue', system-ui, -apple-system, Segoe UI, Roboto, Arial;letter-spacing:1px;}
   #final button.alt{background:#60a5fa;color:#031b4e}
   canvas{display:block}
   .confetti{position:fixed;top:-10px;width:8px;height:12px;opacity:.95;pointer-events:none}
 
   #controlsPanel{
     display:none;
-    max-width:min(760px,92vw);
-    margin:18px auto 0;
+    position:absolute;
+    left:50%;
+    top:56%;
+    transform:translate(-50%,-50%);
+    width:min(980px,94vw);
+    max-height:70vh;
+    overflow:auto;
+    -webkit-overflow-scrolling:touch;
+    margin:0;
     text-align:left;
-    background:rgba(12,16,26,0.7);
+    background:rgba(12,16,26,0.78);
     border:1px solid rgba(255,255,255,0.18);
-    border-radius:16px;
-    padding:18px 20px;
-    box-shadow:0 10px 30px rgba(0,0,0,.35);
+    border-radius:18px;
+    padding:18px 22px 16px;
+    box-shadow:0 14px 40px rgba(0,0,0,.45);
+    z-index:25;
   }
   #controlsPanel h2{ margin:0 0 10px; font:800 22px/1.1 system-ui,-apple-system,Segoe UI,Roboto; }
   #controlsPanel .sec{ margin:10px 0; }
@@ -42,26 +54,232 @@
   #controlsPanel ul{ margin:6px 0 0 14px; padding:0; }
   #controlsPanel li{ margin:4px 0; }
 
+
+/* ===== UI CLEANUP: hide corner rules text ===== */
+#corner{
+  display:none !important;
+  pointer-events:none !important;
+}
+
+
+/* ===== UI CLEANUP: hide ONLY the top dark-green banner (phase description) ===== */
+#banner{
+  display: none !important;
+  pointer-events: none !important;
+}
+
+
+/* ===== UI FONT: Bebas Neue for top-left HUD ===== */
+#help,
+#score,
+#shot,
+#playerScore{
+  font-family: 'Bebas Neue', system-ui, -apple-system, Segoe UI, Roboto, Arial !important;
+  letter-spacing: 1px;
+}
+
+
+/* ===== RANKING SUBMIT UI ===== */
+#submitScoreWrap input, #submitScoreWrap button{
+  font-family: 'Bebas Neue', system-ui, -apple-system, Segoe UI, Roboto, Arial !important;
+  letter-spacing: 1px;
+}
+
+
+/* ===== FINAL SCORE FONT (BEBAS NEUE) ===== */
+#finalSubtitle{
+  font-family: 'Bebas Neue', system-ui, -apple-system, Segoe UI, Roboto, Arial;
+  letter-spacing: 1.5px;
+  font-size: 22px;
+}
+/* ===== TV SCOREBOARD (dynamic, no PNG) ===== */
+#tvScoreboard{
+  position:fixed;
+  top:14px;
+  left:14px;
+
+  width:min(520px, 46vw);
+  aspect-ratio: 1750 / 1000;
+
+  pointer-events:none;
+  transform: scale(0.33);
+  transform-origin: top left;
+  will-change: transform;
+
+  z-index: 999999;
+  isolation: isolate;
+
+  /* Theme colors (updated per phase via JS) */
+  --sbOuter: #167a3c; /* apron / external court */
+  --sbInner: #14a94f; /* court surface */
+
+  /* 2x3 broadcast board (no PNG, avoids logo/CSS conflicts) */
+  background:
+    linear-gradient(to right,
+      var(--sbOuter) 0 33.333%,
+      var(--sbInner) 33.333% 66.666%,
+      var(--sbOuter) 66.666% 100%
+    ) 0 0 / 100% 50% no-repeat,
+    linear-gradient(to right,
+      var(--sbInner) 0 33.333%,
+      var(--sbOuter) 33.333% 66.666%,
+      var(--sbInner) 66.666% 100%
+    ) 0 100% / 100% 50% no-repeat;
+  box-shadow: none;
+}
+
+#tvScoreboard::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+  /* grid lines */
+  background:
+    linear-gradient(to right,
+      transparent 0 33.1%,
+      rgba(255,255,255,.22) 33.1% 33.5%,
+      transparent 33.5% 66.4%,
+      rgba(255,255,255,.22) 66.4% 66.8%,
+      transparent 66.8% 100%
+    ),
+    linear-gradient(to bottom,
+      transparent 0 49.8%,
+      rgba(255,255,255,.22) 49.8% 50.2%,
+      transparent 50.2% 100%
+    );
+  mix-blend-mode: normal;
+}
+
+
+#tvScoreboard .tvCell{
+  position:absolute;
+  color:#fff;
+  font-family:'Bebas Neue', system-ui, -apple-system, Segoe UI, Roboto, Arial;
+  letter-spacing:1px;
+  text-shadow: none;
+  line-height:1;
+  transform:translate(-50%,-50%);
+  user-select:none;
+}
+#tvScoreboard .tvName{
+  font-size:clamp(28px, 4.2vw, 66px);
+}
+#tvScoreboard .tvGames{
+  font-size:clamp(34px, 4.8vw, 76px);
+}
+#tvScoreboard .tvPts{
+  font-size:clamp(34px, 4.8vw, 76px);
+}
+
+/* Positions (percentages relative to board) */
+#tvYouName{ left:18%; top:27%; }
+#tvCpuName{ left:18%; top:77%; }
+
+#tvYouGames{ left:57%; top:27%; }
+#tvCpuGames{ left:57%; top:77%; }
+
+#tvYouPts{ left:88%; top:27%; }
+#tvCpuPts{ left:88%; top:77%; }
+
+/* Serve indicator dot (outside the board) */
+#tvServeDot{
+  position:absolute;
+  width:10px;
+  height:10px;
+  border-radius:50%;
+  background:#fff;
+  left:-12px;
+  top:27%;
+  transform:translate(-50%,-50%);
+  box-shadow: none;
+}
+
+/* Score under the board */
+.tvScore{
+  position:fixed;
+  top:16px;
+  right:18px;
+  left:auto;
+  bottom:auto;
+  margin:0;
+  padding:0;
+  color:#fff;
+  font-family:'Bebas Neue', sans-serif;
+  letter-spacing:1px;
+  font-size:clamp(16px, 2.1vw, 22px);
+  text-shadow: none;
+  pointer-events:none;
+}
+
+
+
+@keyframes tvPulse{
+  0%,100%{ transform:translate(-50%,-50%) scale(1); opacity:0.95; }
+  50%{ transform:translate(-50%,-50%) scale(1.22); opacity:1; }
+}
+#tvServeDot{ animation: tvPulse 1.05s ease-in-out infinite; }
+
+@keyframes tvFlash{
+  0%{ filter:brightness(1.45); }
+  100%{ filter:brightness(1); }
+}
+#tvScoreboard.tvFlash{ animation: tvFlash 220ms ease-out; }
+
 </style>
 </head>
 <body>
 <div id="ui">
   <div class="hud" id="help">
-    <div id="banner">Fase 1/10 • Melhor de 3 games • Mover: WASD (invertido) • Mirar: A/D • J Topspin • K Slice • L Lob • I Flat • O Drop • P Pausa</div>
-    <div id="score">Games 0–0 | Pontos: 0–0 | Saque: Você (direita)</div>
-    <div id="shot">Golpe: —</div>
+    <div id="tvScoreboard" aria-label="Scoreboard">
+<div id="tvYouName" class="tvCell tvName">YOU</div>
+      <div id="tvCpuName" class="tvCell tvName">CPU</div>
+
+      <div id="tvYouGames" class="tvCell tvGames">0</div>
+      <div id="tvCpuGames" class="tvCell tvGames">0</div>
+
+      <div id="tvYouPts" class="tvCell tvPts">0</div>
+      <div id="tvCpuPts" class="tvCell tvPts">0</div>
+
+      <div id="tvServeDot" aria-hidden="true"></div>
+    </div>
+
+    <div id="playerScore" class="tvScore">Score: 0</div>
+
+    <!-- legacy (kept to avoid breaking existing JS bindings) -->
+    <div id="banner"></div>
+    <div id="score" style="display:none"></div>
+    <div id="shot" style="display:none"></div>
   </div>
-  <div class="hud" id="corner">Rede branca em malha • IN/OUT no 1º quique • Laterais livres • Boost voleio 3× (você) • Saque sempre cruzado</div>
 </div>
 <div id="pause">PAUSADO – pressione P</div>
 
 <div id="final">
   <h1 id="finalTitle">Você venceu a fase! 🏆</h1>
   <p id="finalSubtitle">Placar final</p>
+  <p id="upsellText" style="display:none; margin:10px 0 14px 0; font-size:18px; opacity:.95; max-width:760px; line-height:1.25; font-family:'Bebas Neue',system-ui,-apple-system,Segoe UI,Roboto,Arial; letter-spacing:1px;">
+    GET THE FULL ROBOTENNIS EXPERIENCE<br>
+    Unlock all 10 levels, multiplayer mode, ranking access, members area and future updates.
+  </p>
   <div class="buttons">
     <button id="continueBtn" class="alt">Próxima fase</button>
     <button id="restartBtn">Repetir fase</button>
   </div>
+  <div id="submitScoreWrap" style="margin-top:16px; width:min(520px,92vw); pointer-events:auto; display:none;">
+    <div style="font-family:'Bebas Neue',system-ui,-apple-system,Segoe UI,Roboto,Arial; letter-spacing:1px; font-size:22px; margin-bottom:8px;">
+      Submit your score
+    </div>
+    <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
+      <input id="playerNameInput" type="text" maxlength="24" placeholder="Your name"
+        style="pointer-events:auto; padding:10px 12px; border-radius:10px; border:1px solid rgba(255,255,255,.25);
+               background:rgba(0,0,0,.25); color:#fff; font-size:16px; width:260px; outline:none;" />
+      <button id="submitScoreBtn" class="alt" style="pointer-events:auto;">Submit</button>
+    </div>
+    <p id="submitHelpText" style="margin:10px 0 0 0; font-size:14px; opacity:.9; line-height:1.25;">
+      To enter the ranking, attach a gameplay video + a final score screenshot to this email.
+      Do not edit the pre-filled info—just add the attachments.
+    </p>
+  </div>
+
 </div>
 
 <div id="grandfinal">
@@ -76,6 +294,14 @@
 <script>
 (()=>{
 // ================== CONFIG BASE ==================
+const DEMO_MODE = true;                 // demo ON/OFF
+const DEMO_MAX_PHASE = 2;               // demo allows phases 1..2
+const FULL_GAME_URL = "https://robotennis.myshopify.com/";
+function openFullGame(){
+  try{ window.open(FULL_GAME_URL, "_blank", "noopener,noreferrer"); }
+  catch(_){ window.location.href = FULL_GAME_URL; }
+}
+
 const COURT_LENGTH = 23.77, SINGLES_WIDTH = 8.23, HALF_W=SINGLES_WIDTH/2;
 const NET_HEIGHT=0.91, NET_THICK=0.05, BALL_RADIUS=0.09;
 const SERVICE_DIST=6.40;
@@ -104,6 +330,40 @@ const SURF={
   blueDual:{ restitution:0.56, postFric:0.98, courtColor:0x87CEFA, apron:0x87CEFA, bg:0x87CEFA },
   pinkDual:{ restitution:0.56, postFric:0.98, courtColor:0xFFC0CB, apron:0xFFC0CB, bg:0xFFC0CB }
 };
+function cssHex(n){
+  n = (n>>>0);
+  return '#' + n.toString(16).padStart(6,'0');
+}
+
+function darkenHex(hex, amount = 0.25){
+  if(!hex || hex[0] !== '#') return hex;
+  const num = parseInt(hex.slice(1), 16);
+  let r = (num >> 16) & 255;
+  let g = (num >> 8) & 255;
+  let b = num & 255;
+
+  r = Math.max(0, Math.floor(r * (1 - amount)));
+  g = Math.max(0, Math.floor(g * (1 - amount)));
+  b = Math.max(0, Math.floor(b * (1 - amount)));
+
+  return `rgb(${r}, ${g}, ${b})`;
+}
+function applyTvTheme(surface){
+  const sb = document.getElementById('tvScoreboard');
+  if(!sb || !surface) return;
+
+  const inner = cssHex(surface.courtColor ?? surface.bg ?? 0x14a94f);
+  let outer   = cssHex(surface.apron ?? surface.bg ?? 0x167a3c);
+
+  // Quadras monocromáticas (F8, F9, F10): cria contraste escurecendo o "outer"
+  if(inner === outer){
+    outer = darkenHex(inner, 0.25);
+  }
+
+  sb.style.setProperty('--sbOuter', outer);
+  sb.style.setProperty('--sbInner', inner);
+}
+
 
 // CPU velocidade extra por fase (F5 reduzida)
 const CPU_SPEED_MULT = {1:1.0, 2:1.5, 3:1.6, 4:1.9, 5:2.0, 6:2.0, 7:2.0};
@@ -138,6 +398,7 @@ function buildCourt(surface=SURF.grass){
   function centerService(zMid){ const g=new THREE.Mesh(new THREE.PlaneGeometry(SERVICE_DIST,0.05),lineMat); g.rotation.x=-Math.PI/2; g.rotation.z=Math.PI/2; g.position.set(0,0.001,zMid); g.userData.isLine=true; courtGroup.add(g); }
   centerService(+SERVICE_DIST/2); centerService(-SERVICE_DIST/2);
   scene.background=new THREE.Color(surface.bg);
+  applyTvTheme(surface);
 }
 buildCourt(SURF.grass);
 
@@ -278,30 +539,90 @@ function clearTrail(){
 const keys=new Set();
 addEventListener('keydown',e=>{keys.add(e.key.toLowerCase()); if(e.key.toLowerCase()==='p')togglePause(); resumeAudio();});
 addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));
+// Música só deve começar no START GAME (evita tocar ao abrir Instructions/Ranking no menu)
+function startPhaseMusicFromUserGesture(){
+  if(!musicUnlocked){
+    musicUnlocked = true;
+    playPhaseMusic(phase);
+  }
+}
+// expõe um hook global pro menu chamar no "Start Game"
+window.RT_startMusic = startPhaseMusicFromUserGesture;
+
 // Toggle First-Person camera on Space (doesn't affect keys Set)
 addEventListener('keydown', e=>{
   if(e.code==='Space'){
-    firstPerson = !firstPerson;
+    // Cycle cameras: 0=aerial,1=first-person,2=baseline-right,3=top-down
+    cameraMode = (cameraMode + 1) % 4;
+
+    // Adjust FOV per camera mode
     try{
-      if(firstPerson){ camera.fov = 72; } else { camera.fov = 58; }
+      if(cameraMode===1) camera.fov = 72;
+      else if(cameraMode===2) camera.fov = 38; // baseline zoom (tighter)
+      else if(cameraMode===3) camera.fov = 70;
+      else camera.fov = 58;
       camera.updateProjectionMatrix();
-      if(typeof player1!=='undefined' && player1) player1.visible = !firstPerson ? true : false;
-      const b = document.getElementById('banner');
-      if(b){
-        let t = b.textContent;
-        if(!/• Espaço: 1ª pessoa/i.test(t)){
-          b.textContent = t + " • Espaço: 1ª pessoa";
-        }
-      }
+    }catch(_){}
+
+    // Hide player's machine only in first-person
+    try{
+      if(typeof player1!=='undefined' && player1) player1.visible = (cameraMode!==1);
     }catch(_){}
   }
-});    
+});
+ 
 
 const shotEl=document.getElementById('shot'); const scoreEl=document.getElementById('score');
 const bannerEl=document.getElementById('banner');
 const finalEl=document.getElementById('final'), finalTitle=document.getElementById('finalTitle'), finalSubtitle=document.getElementById('finalSubtitle');
 const continueBtn=document.getElementById('continueBtn'), restartBtn=document.getElementById('restartBtn');
-const grandFinal=document.getElementById('grandfinal'); const replayBtn=document.getElementById('replayCampaign');
+const grandFinal=document.getElementById('grandfinal');
+
+// ================== RANKING SUBMIT (EMAIL) ==================
+const RANKING_EMAIL = "robotennisranking@gmail.com"; // <- troque para o seu email do ranking
+let lastFinal = { phase:1, gamesYou:0, gamesCPU:0, score:0, youWin:false };
+
+function openRankingEmail(){
+  const nameEl = document.getElementById('playerNameInput');
+  const name = (nameEl && nameEl.value ? nameEl.value.trim() : "");
+  if(!name){
+    if(nameEl){ nameEl.focus(); }
+    return;
+  }
+  const subject = `ROBOTENNIS RANKING SUBMISSION — ${name}`;
+  const bodyLines = [
+    "ROBOTENNIS RANKING SUBMISSION",
+    "",
+    `Player: ${name}`,
+    `Score: ${Number(lastFinal.score||0).toLocaleString()}`,
+    `Phase reached: ${lastFinal.phase}/10`,
+    `Final match score (games): ${lastFinal.gamesYou}-${lastFinal.gamesCPU}`,
+    "",
+    "ATTACHMENTS REQUIRED:",
+    "1) Gameplay video (screen)",
+"3) Final score screenshot",
+    "",
+    "IMPORTANT: Do not change the pre-filled information above. Only add the attachments."
+  ];
+  const body = bodyLines.join("\n");
+  const mailto = `mailto:${encodeURIComponent(RANKING_EMAIL)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  window.location.href = mailto;
+}
+
+(function bindRankingSubmit(){
+  const btn = document.getElementById('submitScoreBtn');
+  const input = document.getElementById('playerNameInput');
+  if(btn){
+    btn.addEventListener('click', (e)=>{ e.preventDefault(); openRankingEmail(); });
+  }
+  if(input){
+    input.addEventListener('keydown', (e)=>{
+      if(e.key === 'Enter'){ e.preventDefault(); openRankingEmail(); }
+    });
+  }
+})();
+
+ const replayBtn=document.getElementById('replayCampaign');
 
 // ===== Cheat code ALL-AROUND (fase 1) =====
 let cheatBuffer = "";
@@ -312,7 +633,7 @@ addEventListener('keydown', (e)=>{
   const ch = (k.length===1) ? k.toUpperCase() : "";
   if(ch){
     cheatBuffer = (cheatBuffer + ch).slice(-20);
-    if(cheatBuffer.includes("ALL-AROUND") && phase===1 && !cheatMenu){
+    if(!DEMO_MODE && cheatBuffer.includes("ALL-AROUND") && phase===1 && !cheatMenu){
       cheatMenu = true;
       bannerEl.textContent = "ALL-AROUND ativado • Pressione 1–9 (ou 0 para F10) para escolher a fase inicial";
     }
@@ -321,12 +642,36 @@ addEventListener('keydown', (e)=>{
     if((k>='1' && k<='9') || k==='0'){
       const num = (k==='0') ? 10 : parseInt(k,10);
       setPhase(num);
+      playPhaseMusic(phase);
       cheatMenu=false;
       bannerEl.textContent = `Fase ${phase}/10 • Selecionada via ALL-AROUND`;
     }
   }
 });
 
+
+// ================== MÚSICA POR FASE (1x) ==================
+let phaseMusic=null;
+let musicUnlocked=false;
+
+function initPhaseMusic(){
+  if(!phaseMusic){
+    phaseMusic = new Audio();
+    phaseMusic.loop = false;   // toca 1x só
+    phaseMusic.volume = 0.6;   // ajuste de volume (0.0 a 1.0)
+  }
+}
+
+function playPhaseMusic(p){
+  if(!musicUnlocked) return; // só depois de interação do usuário (ENTER etc.)
+  initPhaseMusic();
+  try{
+    phaseMusic.pause();
+    phaseMusic.currentTime = 0;
+    phaseMusic.src = `Track ${p}.mp3`;
+    phaseMusic.play().catch(()=>{});
+  }catch(_){}
+}
 
 // ================== ÁUDIO (som único) ==================
 let actx=null, master=null;
@@ -351,7 +696,9 @@ const SFX={
 
 // ================== ESTADO / FASES ==================
 let paused=false,rallying=false,isServe=true;
-let firstPerson=false;
+let cameraMode=0; // 0=aerial,1=first-person,2=baseline-right,3=top-down
+let firstPerson=false; // legacy flag (unused)
+
 let server=1; // 1 você, 2 CPU
 let serveRight=true; // direita/deuce, alterna a cada ponto
 let ballVel=new THREE.Vector3(0,0,0);
@@ -530,6 +877,30 @@ function resetMatchScoreKeepPhase(){
   cpuMissArmed = (phase===8||phase===9||phase===10); resetForNextPoint();
 }
 
+
+// ================== SCORE (PLAYER ONLY) ==================
+let playerScore = 0;
+
+function phaseMultiplier(){
+  return Math.pow(2, phase-1);
+}
+
+function addScore(base){
+  playerScore += base * phaseMultiplier();
+  updateScoreHUD();
+}
+
+function updateScoreHUD(){
+  let scoreEl2 = document.getElementById('playerScore');
+  if(!scoreEl2){
+    scoreEl2 = document.createElement('div');
+    scoreEl2.id = 'playerScore';
+    scoreEl2.className = 'tvScore';
+    document.body.appendChild(scoreEl2);
+  }
+  scoreEl2.textContent = 'Score: ' + playerScore.toLocaleString();
+}
+
 // ================== PLACAR / UI ==================
 function fmtPoints(){
   const map=[0,15,30,40];
@@ -539,10 +910,67 @@ function fmtPoints(){
   }
   return `${map[Math.min(pointsYou,3)]}–${map[Math.min(pointsCPU,3)]}`;
 }
+let _tvPrevKey = '';
+
 function updateScoreText(){
+  // Tennis points label (0/15/30/40/AD)
+  const map=[0,15,30,40];
+
+  let youLabel = '0';
+  let cpuLabel = '0';
+
+  if(pointsYou>=3 && pointsCPU>=3){
+    if(pointsYou===pointsCPU){
+      youLabel = '40';
+      cpuLabel = '40';
+    }else if(pointsYou>pointsCPU){
+      youLabel = 'AD';
+      cpuLabel = '40';
+    }else{
+      youLabel = '40';
+      cpuLabel = 'AD';
+    }
+  }else{
+    youLabel = String(map[Math.min(pointsYou,3)]);
+    cpuLabel = String(map[Math.min(pointsCPU,3)]);
+  }
+
+  // Update TV scoreboard
+  const elYouG = document.getElementById('tvYouGames');
+  const elCpuG = document.getElementById('tvCpuGames');
+  const elYouP = document.getElementById('tvYouPts');
+  const elCpuP = document.getElementById('tvCpuPts');
+  if(elYouG) elYouG.textContent = String(gamesYou);
+  if(elCpuG) elCpuG.textContent = String(gamesCPU);
+  if(elYouP) elYouP.textContent = youLabel;
+  if(elCpuP) elCpuP.textContent = cpuLabel;
+
+  // Serve dot (outside the board)
+  const dot = document.getElementById('tvServeDot');
+  if(dot){
+    dot.style.top = (server===1) ? '27%' : '77%';
+  }
+
+  // Tiny flash on any scoreboard change (points/games/server)
+  const tv = document.getElementById('tvScoreboard');
+  if(tv){
+    const key = `${gamesYou}-${gamesCPU}-${youLabel}-${cpuLabel}-${server}`;
+    if(key !== _tvPrevKey){
+      _tvPrevKey = key;
+      tv.classList.remove('tvFlash');
+      // force reflow to restart animation reliably
+      void tv.offsetWidth;
+      tv.classList.add('tvFlash');
+    }
+  }
+
+
+  // Keep legacy text updated (hidden)
   const whoServes = (server===1)?'Você':'CPU';
   const lado = serveRight ? 'direita' : 'esquerda';
-  scoreEl.textContent = `Fase ${phase}/10 | Games ${gamesYou}–${gamesCPU} (melhor de 3) | Pontos: ${fmtPoints()} | Saque: ${whoServes} (${lado})`;
+  if(scoreEl){
+    scoreEl.textContent = `Games ${gamesYou}–${gamesCPU} | Pontos: ${youLabel}–${cpuLabel} | Saque: ${whoServes} (${lado})`;
+  }
 }
 
 // ================== UTIL / MIRA ==================
@@ -794,6 +1222,7 @@ ball.userData.isServeShot = !!isServe;
   rallying=true; isServe=false;
   shotEl.textContent=`Golpe: ${shotType}${(isP && inVolleyZone(fromMesh) && !isServe)?' (Voleio 3×)':''}`;
   SFX.hit();
+  if(fromMesh===player1){ addScore(10); }
 }
 
 // ================== CPU ==================
@@ -928,11 +1357,11 @@ function handlePlayer(dt){
 
 // ================== REGRAS / PLACAR ==================
 function awardPointTo(meshWinner){
-  if(meshWinner===player1) pointsYou++; else pointsCPU++;
+  if(meshWinner===player1){ pointsYou++; addScore(ball.userData.isServeShot ? 75 : 50); } else pointsCPU++;
   SFX.point();
   if(pointsYou>=4 || pointsCPU>=4){
     if(Math.abs(pointsYou-pointsCPU)>=2){
-      if(pointsYou>pointsCPU) gamesYou++; else gamesCPU++;
+      if(pointsYou>pointsCPU){ gamesYou++; addScore(100); } else gamesCPU++;
       pointsYou=pointsCPU=0; SFX.game();
       cpuFlatLeft = cpuFlatPerGame(); cpuDropLeft = cpuDropPerGame(); cpuDropLeft = cpuDropPerGame();
       if(gamesYou>=GAMES_TO_WIN || gamesCPU>=GAMES_TO_WIN){
@@ -949,21 +1378,96 @@ function awardPointTo(meshWinner){
 }
 
 function showPhaseEnd(youWin){
-  finalTitle.textContent = youWin? `Fase ${phase} vencida! 🏆` : `Fase ${phase} perdida 😅`;
-  finalSubtitle.textContent = `Placar: ${gamesYou}–${gamesCPU}`;
-  continueBtn.style.display = youWin && phase< 10  ? 'inline-block' : 'none';
-  restartBtn.textContent = youWin && phase< 10  ? 'Repetir fase' : 'Jogar de novo';
-  finalEl.style.display='flex';
-  (youWin?SFX.win:SFX.lose)();
-  if(youWin && phase===10){
+// DEMO CTA (Phase 1): ensure the extra button does not persist between screens
+const _oldDemoCta = document.getElementById('demoCtaBtn');
+if(_oldDemoCta){ try{ _oldDemoCta.remove(); }catch(_){ _oldDemoCta.parentNode && _oldDemoCta.parentNode.removeChild(_oldDemoCta); } }
+  const finalScore = playerScore; // capture before any reset
+  lastFinal = { phase: phase, gamesYou: gamesYou, gamesCPU: gamesCPU, score: finalScore, youWin: !!youWin };
+
+  const upsell = document.getElementById('upsellText');
+  const demoLocked = (DEMO_MODE && phase >= DEMO_MAX_PHASE);
+  if(upsell){ upsell.style.display = demoLocked ? 'block' : 'none'; }
+
+  if(youWin){
+    addScore(200); // win bonus
+  }else{
+    // Hardcore penalty: zero score on loss
+    playerScore = 0;
+    updateScoreHUD();
+  }
+
+  if(youWin){
+    finalTitle.textContent = "YOU WIN";
+    finalSubtitle.textContent = `${gamesYou}–${gamesCPU}`;
+
+    continueBtn.style.display = (phase < 10) ? 'inline-block' : 'none';
+    continueBtn.textContent = "NEXT LEVEL";
+
+    restartBtn.style.display = 'inline-block';
+    restartBtn.textContent = "REPLAY LEVEL";
+
+// Demo CTA: show a simple "BUY FULL VERSION" button when you beat Phase 1
+if(phase === 1){
+  const demoCtaBtn = document.createElement('button');
+  demoCtaBtn.id = 'demoCtaBtn';
+  demoCtaBtn.className = 'alt';
+  demoCtaBtn.textContent = 'BUY FULL VERSION';
+  demoCtaBtn.addEventListener('click', (e)=>{
+    e.preventDefault();
+    window.open('https://robotennis.myshopify.com/', '_blank', 'noopener,noreferrer');
+  });
+  const btnRow = document.querySelector('#final .buttons');
+  if(btnRow) btnRow.appendChild(demoCtaBtn);
+}
+  }else{
+    finalTitle.textContent = "GAME OVER";
+    finalSubtitle.textContent = `${gamesYou}–${gamesCPU} • SCORE: ${Number(finalScore||0).toLocaleString()}`;
+
+    continueBtn.style.display = 'none';
+
+    restartBtn.style.display = 'inline-block';
+    restartBtn.textContent = "TRY AGAIN";
+
+// Demo CTA: show a simple "BUY FULL VERSION" button on Phase 1 (win or lose)
+if(phase === 1){
+  const demoCtaBtn = document.createElement('button');
+  demoCtaBtn.id = 'demoCtaBtn';
+  demoCtaBtn.className = 'alt';
+  demoCtaBtn.textContent = 'BUY FULL VERSION';
+  demoCtaBtn.addEventListener('click', (e)=>{
+    e.preventDefault();
+    openFullGame();
+  });
+  const btnRow = document.querySelector('#final .buttons');
+  if(btnRow) btnRow.appendChild(demoCtaBtn);
+}
+
+  }
+
+  // Demo upsell: lock after phase 2 (win or lose) and redirect to full game
+  if(demoLocked){
+    continueBtn.style.display = 'inline-block';
+    continueBtn.textContent = 'BUY FULL VERSION';
+    continueBtn.classList.add('alt');
+    continueBtn.onclick = ()=>{ openFullGame(); };
+  }
+
+  const submitWrap = document.getElementById('submitScoreWrap');
+  if(submitWrap){ submitWrap.style.display = youWin ? 'none' : 'block'; }
+
+  finalEl.style.display = 'flex';
+  (youWin ? SFX.win : SFX.lose)();
+
+  if(youWin && phase === 10){
     setTimeout(()=>celebrateCampaign(true), 500);
   }
 }
 
-continueBtn.onclick = ()=>{ finalEl.style.display='none'; setPhase(phase+1); };
-restartBtn.onclick  = ()=>{ finalEl.style.display='none'; setPhase(phase); };
 
-replayBtn && (replayBtn.onclick = ()=>{ grandFinal.style.display='none'; setPhase(1); });
+continueBtn.onclick = ()=>{ finalEl.style.display='none'; if(DEMO_MODE && phase>=DEMO_MAX_PHASE){ openFullGame(); return; } setPhase(phase+1); playPhaseMusic(phase); };
+restartBtn.onclick  = ()=>{ finalEl.style.display='none'; setPhase(phase); playPhaseMusic(phase); };
+
+replayBtn && (replayBtn.onclick = ()=>{ grandFinal.style.display='none'; setPhase(1); playPhaseMusic(phase); });
 
 function celebrateCampaign(youWin){
   finalEl.style.display='none';
@@ -1125,21 +1629,38 @@ function tick(now){
   // Trail sampling & fade
   if(rallying){ trailAcc += dt; if(trailAcc > 0.016){ addTrailSample(); trailAcc = 0; } }
   fadeTrail(dt);
-  if(firstPerson){
-    // First-person-ish: slightly above/behind player's launcher, looking forward
+  switch(cameraMode){
+  case 1: { // first-person
+    camera.up.set(0,1,0);
     const eye = new THREE.Vector3(player1.position.x, 1.55, player1.position.z - 0.35);
     const target = new THREE.Vector3(player1.position.x, 1.35, player1.position.z + 2.4);
     camera.position.lerp(eye, 0.28);
     camera.lookAt(target);
-  
-  if(typeof player1!=='undefined' && player1) player1.visible=false;
-}else{
+    break;
+  }
+  case 2: { // baseline right (angled)
+    camera.up.set(0,1,0);
+    const camPos = new THREE.Vector3(HALF_W + 1.2, 4.8, -(COURT_LENGTH/2) - 14.0); // farther behind baseline
+    camera.position.lerp(camPos, 0.08);
+    camera.lookAt(new THREE.Vector3(0, 1.05, 0.4)); // less angled, more broadcast
+    break;
+  }
+  case 3: { // top-down perpendicular
+    camera.up.set(0,0,1); // keep player at bottom // keep the court oriented nicely
+    const camPos = new THREE.Vector3(0, 28.0, 0);
+    camera.position.lerp(camPos, 0.10);
+    camera.lookAt(new THREE.Vector3(0, 0, 0));
+    break;
+  }
+  default: { // 0 = aerial (default)
+    camera.up.set(0,1,0);
     const camX = player1.position.x*0.30;
     camera.position.lerp(new THREE.Vector3(camX, 18.0, -COURT_LENGTH*0.95), 0.08);
     camera.lookAt(new THREE.Vector3(0, 0.6, -COURT_LENGTH*0.25));
-  
-  if(typeof player1!=='undefined' && player1) player1.visible=true;
+    break;
+  }
 }
+
   renderer.render(scene,camera);
   requestAnimationFrame(tick);
 }
@@ -1191,12 +1712,25 @@ setPhase(1);
     display:inline-block; min-width:1.6em; padding:.18em .5em; border-radius:8px; border:1px solid rgba(255,255,255,.25);
     background:rgba(255,255,255,.08); font-weight:800;
   }
+
+  /* ===== ARCADE MENU LIST ===== */
+  #mainMenu .inner h1{ margin-top:-30px; }
+  #menuList{ margin-top:18px; text-align:center; font-family:'Bebas Neue', system-ui, -apple-system, Segoe UI, Roboto, Arial; }
+  .menuItem{ font-size:42px; letter-spacing:3px; margin:14px 0; color:rgba(255,255,255,.45); user-select:none; }
+  .menuItem.selected{ color:#fff; }
+  .menuHint{ margin-top:10px; opacity:.9; font-size:14px; }
+
 </style>
 <div id="mainMenu">
   <div class="inner">
-    <h1>ROBOTENIS</h1>
-    <p>Pressione <kbd>ENTER</kbd> para começar • Pressione <kbd>SHIFT</kbd> para ver os controles</p>
-<div id="controlsPanel"><h2>🎮 Controles do RoboTennis 🎾</h2><div class="sec"><strong>Movimento do Jogador</strong><ul><li><strong>WASD</strong> → controla o jogador</li></ul></div><div class="sec"><strong>Golpes</strong><ul><li><strong>J</strong> → Topspin</li><li><strong>K</strong> → Slice</li><li><strong>L</strong> → Lob</li><li><strong>I</strong> → Flat</li><li><strong>O</strong> → Drop</li></ul></div><div class="sec"><strong>Câmera</strong><ul><li><strong>Espaço</strong> → alterna a câmera (1ª pessoa ↔ aérea)</li></ul></div><div class="sec"><strong>Tipos de Máquinas</strong><ul><li><strong>Azul</strong> → Topspin</li><li><strong>Verde</strong> → Topspin e Slice</li><li><strong>Preta</strong> → Topspin, Flat, Slice e Lob</li><li><strong>Branca</strong> → Topspin, Flat, Slice e Lob</li><li><strong>Lilás</strong> → Topspin, Slice, Lob e Drop</li></ul></div><p style="margin-top:10px;opacity:.9"><em>Pressione <strong>SHIFT</strong> novamente para fechar</em></p></div>
+    <h1><img src="logo-alta.png" alt="Robotênis" style="height:100px;"/></h1>
+    <div id="menuList" aria-label="Main menu">
+      <div class="menuItem selected" data-action="start">START GAME</div>
+      <div class="menuItem" data-action="ranking">RANKING</div>
+      <div class="menuItem" data-action="instructions">INSTRUCTIONS</div>
+    </div>
+    <p class="menuHint">Use <kbd>↑</kbd>/<kbd>↓</kbd> and <kbd>ENTER</kbd></p>
+<div id="controlsPanel"><h2>🎮 RoboTennis Controls 🎾</h2><div class="sec"><strong>Player Movement</strong><ul><li><strong>WASD</strong> → move your machine</li></ul></div><div class="sec"><strong>Shots</strong><ul><li><strong>J</strong> → Topspin</li><li><strong>K</strong> → Slice</li><li><strong>L</strong> → Lob</li><li><strong>I</strong> → Flat</li><li><strong>O</strong> → Drop</li></ul></div><div class="sec"><strong>Camera</strong><ul><li><strong>Space</strong> → cycle cameras (aerial ↔ 1st person ↔ baseline ↔ top)</li></ul></div><div class="sec"><strong>Machine Types</strong><ul><li><strong>Blue</strong> → Topspin</li><li><strong>Green</strong> → Topspin and Slice</li><li><strong>Black</strong> → Topspin, Flat, Slice and Lob</li><li><strong>White</strong> → Topspin, Flat, Slice and Lob</li><li><strong>Purple</strong> → Topspin, Slice, Lob and Drop</li></ul></div><p style="margin-top:10px;opacity:.9"><em>Press <strong>ESC</strong> to close (or <strong>SHIFT</strong>)</em></p></div>
   </div>
 </div>
 
@@ -1234,21 +1768,82 @@ setPhase(1);
     }
   }, true);
 
-  // ENTER starts game: hide menu; block SPACE while menu is visible
+  /* ESC to close controls */
   window.addEventListener('keydown', function(e){
+    if(!menuVisible) return;
     const code = e.code || e.key || '';
-    if(menuVisible && (code === 'Enter' || e.key === 'Enter' || e.keyCode === 13)){
-      hideMenu();
-      return;
-    }
-    if(menuVisible && (code === 'Space' || e.code === 'Space')){
+    if(controlsOpen && (code === 'Escape' || e.key === 'Escape')){
+      controlsOpen = false;
+      setControlsVisible(false);
       e.preventDefault();
       e.stopPropagation();
       return;
     }
   }, true);
+
+
+  // MENU navigation (↑/↓ + ENTER) while menu is visible
+  let menuIndex = 0;
+  function updateMenuSelection(){
+    const items = document.querySelectorAll('#menuList .menuItem');
+    items.forEach((el,i)=>el.classList.toggle('selected', i===menuIndex));
+  }
+  function runMenuAction(){
+    const items = document.querySelectorAll('#menuList .menuItem');
+    const el = items[menuIndex];
+    if(!el) return;
+    const action = el.getAttribute('data-action') || '';
+    if(action === 'start'){
+      try{ if(typeof window.RT_startMusic==='function') window.RT_startMusic(); }catch(_){ }
+      hideMenu();
+      return;
+    }
+    if(action === 'instructions'){
+      controlsOpen = true;
+      setControlsVisible(true);
+      return;
+    }
+    if(action === 'ranking'){
+      window.open('https://robotennis.myshopify.com/pages/ranking', '_blank', 'noopener,noreferrer');
+      return;
+    }
+  }
+
+  window.addEventListener('keydown', function(e){
+    const code = e.code || e.key || '';
+    if(!menuVisible) return;
+
+    if(code === 'ArrowDown' || e.key === 'ArrowDown'){
+      menuIndex = (menuIndex + 1) % document.querySelectorAll('#menuList .menuItem').length;
+      updateMenuSelection();
+      e.preventDefault(); e.stopPropagation();
+      return;
+    }
+    if(code === 'ArrowUp' || e.key === 'ArrowUp'){
+      const n = document.querySelectorAll('#menuList .menuItem').length;
+      menuIndex = (menuIndex - 1 + n) % n;
+      updateMenuSelection();
+      e.preventDefault(); e.stopPropagation();
+      return;
+    }
+    if(code === 'Enter' || e.key === 'Enter' || e.keyCode === 13){
+      runMenuAction();
+      e.preventDefault(); e.stopPropagation();
+      return;
+    }
+    if(code === 'Space' || e.code === 'Space'){
+      // avoid accidental serve/jump while menu is up
+      e.preventDefault(); e.stopPropagation();
+      return;
+    }
+  }, true);
+
+  // ensure initial highlight
+  updateMenuSelection();
+
 })();
 </script>
+
 
 </body>
 </html>
