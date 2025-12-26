@@ -24,7 +24,7 @@
   #final h1,#grandfinal h1{font-size:42px;margin:0 0 6px 0}
   #final p,#grandfinal p{margin:4px 0 12px 0;font-size:18px;opacity:.9}
   #final .buttons,#grandfinal .buttons{display:flex;gap:10px}
-  #final button,#grandfinal button{pointer-events:auto;background:#10b981;border:0;color:#042; font-weight:800;padding:10px 16px;border-radius:10px;cursor:pointer; font-family:'Bebas Neue', system-ui, -apple-system, Segoe UI, Roboto, Arial;letter-spacing:1px;}
+  #final button,#grandfinal button{pointer-events:auto;background:#10b981;border:0;color:#042; font-weight:800;padding:10px 16px;border-radius:10px;cursor:pointerfont-family:'Bebas Neue', system-ui, -apple-system, Segoe UI, Roboto, Arial;letter-spacing:1px;}
   #final button.alt{background:#60a5fa;color:#031b4e}
   canvas{display:block}
   .confetti{position:fixed;top:-10px;width:8px;height:12px;opacity:.95;pointer-events:none}
@@ -251,15 +251,11 @@
     <div id="shot" style="display:none"></div>
   </div>
 </div>
-<div id="pause">PAUSADO – pressione P</div>
+<div id="pause">PAUSED</div>
 
 <div id="final">
   <h1 id="finalTitle">Você venceu a fase! 🏆</h1>
   <p id="finalSubtitle">Placar final</p>
-  <p id="upsellText" style="display:none; margin:10px 0 14px 0; font-size:18px; opacity:.95; max-width:760px; line-height:1.25; font-family:'Bebas Neue',system-ui,-apple-system,Segoe UI,Roboto,Arial; letter-spacing:1px;">
-    GET THE FULL ROBOTENNIS EXPERIENCE<br>
-    Unlock all 10 levels, multiplayer mode, ranking access, members area and future updates.
-  </p>
   <div class="buttons">
     <button id="continueBtn" class="alt">Próxima fase</button>
     <button id="restartBtn">Repetir fase</button>
@@ -294,14 +290,6 @@
 <script>
 (()=>{
 // ================== CONFIG BASE ==================
-const DEMO_MODE = true;                 // demo ON/OFF
-const DEMO_MAX_PHASE = 2;               // demo allows phases 1..2
-const FULL_GAME_URL = "https://robotennis.myshopify.com/";
-function openFullGame(){
-  try{ window.open(FULL_GAME_URL, "_blank", "noopener,noreferrer"); }
-  catch(_){ window.location.href = FULL_GAME_URL; }
-}
-
 const COURT_LENGTH = 23.77, SINGLES_WIDTH = 8.23, HALF_W=SINGLES_WIDTH/2;
 const NET_HEIGHT=0.91, NET_THICK=0.05, BALL_RADIUS=0.09;
 const SERVICE_DIST=6.40;
@@ -376,6 +364,22 @@ const scene=new THREE.Scene(); scene.background=new THREE.Color(SURF.grass.bg);
 const hemi=new THREE.HemisphereLight(0xffffff,0x203030,.95); scene.add(hemi);
 const dir=new THREE.DirectionalLight(0xffffff,.8); dir.position.set(4,10,8); scene.add(dir);
 const camera=new THREE.PerspectiveCamera(58,innerWidth/innerHeight,0.1,300); scene.add(camera);
+
+// Split-screen cameras (used in LOCAL MULTIPLAYER)
+const cameraP1 = new THREE.PerspectiveCamera(58,(innerWidth*0.5)/innerHeight,0.1,300);
+const cameraP2 = new THREE.PerspectiveCamera(58,(innerWidth*0.5)/innerHeight,0.1,300);
+scene.add(cameraP1);
+scene.add(cameraP2);
+
+function updateSplitCameraAspects(){
+  const halfW = Math.max(1, innerWidth*0.5);
+  const h = Math.max(1, innerHeight);
+  cameraP1.aspect = halfW / h;
+  cameraP2.aspect = halfW / h;
+  cameraP1.updateProjectionMatrix();
+  cameraP2.updateProjectionMatrix();
+}
+
 
 // ================== QUADRA ==================
 const courtGroup=new THREE.Group(); scene.add(courtGroup);
@@ -511,6 +515,83 @@ for(let i=0;i<TRAIL_COUNT;i++){
 }
 let trailIndex=0, trailAcc=0;
 
+// ================== PLAYER PROFILES (shots always available) ==================
+const PLAYER_PROFILES = {
+  blue: { // mais fraca
+    timeMult:{ Topspin:1.00, Lob:1.00, Slice:1.22, Flat:1.25, Drop:1.35 },
+    sliceCurveMult: 1.0
+  },
+  green:{
+    timeMult:{ Topspin:1.00, Lob:1.00, Slice:1.00, Flat:1.15, Drop:1.25 },
+    sliceCurveMult: 1.2
+  },
+  black:{
+    timeMult:{ Topspin:1.00, Lob:1.00, Slice:1.00, Flat:1.00, Drop:1.10 },
+    sliceCurveMult: 1.4,
+    spinMult: 1.12 // topspin com mais kick
+  },
+  purple:{
+    timeMult:{ Topspin:1.00, Lob:1.00, Slice:1.00, Flat:1.00, Drop:1.00 },
+    sliceCurveMult: 1.6
+  },
+  white:{
+    timeMult:{ Topspin:1.00, Lob:1.00, Slice:1.00, Flat:1.00, Drop:0.90 },
+    sliceCurveMult: 1.9
+  }
+};
+let currentPlayerProfileKey='blue';
+function getPlayerProfile(){ return PLAYER_PROFILES[currentPlayerProfileKey] || PLAYER_PROFILES.blue; }
+
+// ================== SHOT VFX (BALL + TRAIL) ==================
+let currentTrailColor = 0xfff073;
+let currentTrailOpacity = 0.85;
+let currentTrailScale = 0.18;
+let currentTrailAdditive = false;
+const DEFAULT_BALL_COLOR = 0xffee00;
+const DEFAULT_TRAIL_COLOR = 0xfff073;
+
+function setShotVFX(shotType){
+  // Topspin: mantém padrão
+  let ballColor = DEFAULT_BALL_COLOR;
+  let glowColor = 0x000000;
+  let glowIntensity = 0.0;
+  let trailColor = DEFAULT_TRAIL_COLOR;
+  let trailOpacity = 0.85;
+  let trailScale = 0.18;
+  let additive = false;
+
+  if(shotType===SHOT_SLICE){
+    ballColor = 0x2cff5a; glowColor = 0x2cff5a; glowIntensity = 0.9;
+    trailColor = 0x2cff5a; trailOpacity = 0.92; trailScale = 0.20; additive = true;
+  } else if(shotType===SHOT_FLAT){
+    ballColor = 0x7fe8ff; glowColor = 0x7fe8ff; glowIntensity = 0.95;
+    trailColor = 0x7fe8ff; trailOpacity = 0.92; trailScale = 0.21; additive = true;
+  } else if(shotType===SHOT_DROP){
+    ballColor = 0xff3b3b; glowColor = 0xff3b3b; glowIntensity = 0.95;
+    trailColor = 0xff3b3b; trailOpacity = 0.95; trailScale = 0.22; additive = true;
+  } else if(shotType===SHOT_LOB){
+    ballColor = 0xff66d9; glowColor = 0xff66d9; glowIntensity = 0.90;
+    trailColor = 0xff66d9; trailOpacity = 0.92; trailScale = 0.20; additive = true;
+  }
+
+  // Apply to ball
+  if(ball && ball.material){
+    ball.material.color.setHex(ballColor);
+    if(ball.material.emissive){
+      ball.material.emissive.setHex(glowColor);
+      ball.material.emissiveIntensity = glowIntensity;
+    }
+    ball.material.needsUpdate = true;
+  }
+
+  // Apply to trail
+  currentTrailColor = trailColor;
+  currentTrailOpacity = trailOpacity;
+  currentTrailScale = trailScale;
+  currentTrailAdditive = additive;
+}
+
+
 function addTrailSample(){
   const s=trailSprites[trailIndex];
   // Place the sample slightly behind the ball, along -velocity, to avoid covering the ball itself
@@ -522,7 +603,11 @@ function addTrailSample(){
     px -= (vx/mag)*back; py -= (vy/mag)*back; pz -= (vz/mag)*back;
   }
   s.position.set(px,py,pz);
-  s.material.opacity = 0.85;
+  s.material.opacity = currentTrailOpacity;
+  s.material.color.setHex(currentTrailColor);
+  s.material.blending = currentTrailAdditive ? THREE.AdditiveBlending : THREE.NormalBlending;
+  s.material.depthWrite = false;
+  s.scale.set(currentTrailScale, currentTrailScale, 1);
   trailIndex = (trailIndex+1) % TRAIL_COUNT;
 }
 function fadeTrail(dt){
@@ -537,7 +622,7 @@ function clearTrail(){
 
 // ================== INPUT / UI ==================
 const keys=new Set();
-addEventListener('keydown',e=>{keys.add(e.key.toLowerCase()); if(e.key.toLowerCase()==='p')togglePause(); resumeAudio();});
+addEventListener('keydown',e=>{keys.add(e.key.toLowerCase()); resumeAudio();});
 addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));
 // Música só deve começar no START GAME (evita tocar ao abrir Instructions/Ranking no menu)
 function startPhaseMusicFromUserGesture(){
@@ -633,14 +718,18 @@ addEventListener('keydown', (e)=>{
   const ch = (k.length===1) ? k.toUpperCase() : "";
   if(ch){
     cheatBuffer = (cheatBuffer + ch).slice(-20);
-    if(!DEMO_MODE && cheatBuffer.includes("ALL-AROUND") && phase===1 && !cheatMenu){
+    if(cheatBuffer.includes("ALL-AROUND") && phase===1 && !cheatMenu){
       cheatMenu = true;
-      bannerEl.textContent = "ALL-AROUND ativado • Pressione 1–9 (ou 0 para F10) para escolher a fase inicial";
+      // In multiplayer we cap phases to 1–7 (8–10 use 2 CPUs and can bug out)
+      bannerEl.textContent = (gameMode === 'multi')
+        ? "ALL-AROUND ativado • Multiplayer: Pressione 1–7 para escolher a fase inicial"
+        : "ALL-AROUND ativado • Pressione 1–9 (ou 0 para F10) para escolher a fase inicial";
     }
   }
   if(cheatMenu){
     if((k>='1' && k<='9') || k==='0'){
-      const num = (k==='0') ? 10 : parseInt(k,10);
+      let num = (k==='0') ? 10 : parseInt(k,10);
+      if(gameMode === 'multi') num = Math.min(7, Math.max(1, num));
       setPhase(num);
       playPhaseMusic(phase);
       cheatMenu=false;
@@ -695,6 +784,32 @@ const SFX={
 };
 
 // ================== ESTADO / FASES ==================
+
+// ================== GAME MODE ==================
+// single = vs CPU (default) | multi = local 2P (P2 controls the opponent)
+let gameMode = 'single';
+function applyGameModeUI(){
+  const youName = document.getElementById('tvYouName');
+  const cpuName = document.getElementById('tvCpuName');
+  const scoreHud = document.getElementById('playerScore');
+  if(gameMode === 'multi'){
+    if(youName) youName.textContent = 'P1';
+    if(cpuName) cpuName.textContent = 'P2';
+    if(scoreHud) scoreHud.style.display = 'none';
+  }else{
+    if(youName) youName.textContent = 'YOU';
+    if(cpuName) cpuName.textContent = 'CPU';
+    if(scoreHud) scoreHud.style.display = '';
+  }
+}
+// Expose for menu
+window.RT_setGameMode = function(mode){
+  gameMode = (String(mode).toLowerCase() === 'multi') ? 'multi' : 'single';
+  applyGameModeUI();
+  // Always restart on phase 1 when switching modes (keeps it predictable)
+  try{ setPhase(1); }catch(_){}
+  // Keep music behavior the same (only starts from user gesture)
+};
 let paused=false,rallying=false,isServe=true;
 let cameraMode=0; // 0=aerial,1=first-person,2=baseline-right,3=top-down
 let firstPerson=false; // legacy flag (unused)
@@ -733,6 +848,10 @@ let serveDelayUntil = 0; // 1.5s antes do CPU sacar
 let serveAttempt = 1; // 1º ou 2º serviço
 
 function setPhase(p){
+  // Multiplayer safety: phases 8–10 spawn 2 CPUs and can bug out; cap at 7.
+  if(gameMode === 'multi') p = Math.min(7, Math.max(1, p|0));
+  else p = Math.min(10, Math.max(1, p|0));
+
   phase=p;
   scene.remove(player1); scene.remove(player2);
   if(typeof cpuL!=='undefined' && cpuL){ scene.remove(cpuL); cpuL=null; }
@@ -865,6 +984,17 @@ function setPhase(p){
   if((phase===8 || phase===9 || phase===10) && cpuL && cpuR){ const baseZ=(COURT_LENGTH/2 - 0.8); cpuL.position.set(-HALF_W+0.6,0,baseZ); cpuR.position.set(+HALF_W-0.6,0,baseZ); cpuL.rotation.y=Math.PI; cpuR.rotation.y=Math.PI; }
   resetMatchScoreKeepPhase();
   buildWhiteMeshNet();
+
+  // ===== Player: all shots always available =====
+  allowedShotsPlayer = { top:true, slice:true, lob:true, flat:true, drop:true };
+
+  // ===== Player profile by phase =====
+  if(phase===1) currentPlayerProfileKey='blue';
+  else if(phase===2 || phase===3) currentPlayerProfileKey='green';
+  else if(phase===4 || phase===5) currentPlayerProfileKey='black';
+  else if(phase===6 || phase===7) currentPlayerProfileKey='white';
+  else currentPlayerProfileKey='purple';
+
 }
 
 function resetMatchScoreKeepPhase(){
@@ -1205,16 +1335,30 @@ ball.userData.isServeShot = !!isServe;
   if(isServe){ const serveMult = (phase===5 || phase===7) ? 1.25 : ((phase===8||phase===9||phase===10) ? 1.5 : 2.0); plan = planWithTime(contact,{x:tgt.x,z:tgt.z}, Math.max(0.18, plan.t / serveMult)); }
 
   if(shotType===SHOT_DROP){ plan = planWithTime(contact,{x:tgt.x,z:tgt.z}, Math.min(1.2, plan.t*1.08)); }
+  
+  // ===== Shot VFX (ball + trail) =====
+  setShotVFX(shotType);
+
+  // ===== Player-only tuning (do NOT affect CPU) =====
+  if(fromMesh===player1){
+    const prof=getPlayerProfile();
+    const m=(prof.timeMult && prof.timeMult[shotType]) ? prof.timeMult[shotType] : 1.0;
+    if(m!==1.0){
+      plan = planWithTime(contact,{x:tgt.x,z:tgt.z}, Math.max(0.18, plan.t*m));
+    }
+  }
+
   ball.position.copy(contact); ballVel.set(plan.vx,plan.vy,plan.vz);
   ball.userData.spinType = shotType;
   ball.userData.spin = (shotType===SHOT_LOB)?0.15:(shotType===SHOT_SLICE?-0.35:(shotType===SHOT_FLAT?0.0:(shotType===SHOT_DROP?-0.6:+0.6)));
+  if(fromMesh===player1){ const prof=getPlayerProfile(); const sm=(prof.spinMult||1.0); if(shotType===SHOT_TOP) ball.userData.spin *= sm; if(shotType===SHOT_DROP && currentPlayerProfileKey==='blue') ball.userData.spin *= 0.75; }
   ball.userData.postBounce=false;
   ball.userData.checkedFirstBounce=false;
   ball.userData.lastSide = (fromMesh===player1)? 'you':'cpu';
   bounceCount = 0;
   if(shotType===SHOT_SLICE && !isServe){
     const dirSign = Math.sign(tgt.x - contact.x) || (tgt.dir||1);
-    ball.userData.curveAx = -4.2 * dirSign;
+    ball.userData.curveAx = -4.2 * dirSign * ((fromMesh===player1)? (getPlayerProfile().sliceCurveMult||1.0) : 1.0);
   }else{
     ball.userData.curveAx = 0;
   }
@@ -1355,13 +1499,37 @@ function handlePlayer(dt){
   if(keys.has('o')){ strike(player1, SHOT_DROP); keys.delete('o'); }
 }
 
+
+// ================== P2 (LOCAL MULTIPLAYER) ==================
+function handlePlayer2(dt){
+  if(gameMode !== 'multi') return;
+  const lockServe = isServe && server===2;
+  if(!lockServe){
+    // Arrows: UP = towards the net, DOWN = back to baseline (P2 side)
+    if(keys.has('arrowup'))    player2.position.z -= CPU_SPEED*dt;
+    if(keys.has('arrowdown'))  player2.position.z += CPU_SPEED*dt;
+    if(keys.has('arrowleft'))  player2.position.x -= CPU_SPEED*dt;
+    if(keys.has('arrowright')) player2.position.x += CPU_SPEED*dt;
+  }
+
+  // Clamp to P2 side
+  player2.position.x = THREE.MathUtils.clamp(player2.position.x, -(HALF_W+EXTRA_OUT), (HALF_W+EXTRA_OUT));
+  player2.position.z = THREE.MathUtils.clamp(player2.position.z, 0.6, (COURT_LENGTH/2 - 0.6));
+
+  // Shots (P2): B N M , .
+  if(keys.has('b')){ strike(player2, SHOT_TOP); keys.delete('b'); }
+  if(keys.has('n')){ strike(player2, SHOT_SLICE); keys.delete('n'); }
+  if(keys.has('m')){ strike(player2, SHOT_LOB); keys.delete('m'); }
+  if(keys.has(',')){ strike(player2, SHOT_FLAT); keys.delete(','); }
+  if(keys.has('.')){ strike(player2, SHOT_DROP); keys.delete('.'); }
+}
 // ================== REGRAS / PLACAR ==================
 function awardPointTo(meshWinner){
-  if(meshWinner===player1){ pointsYou++; addScore(ball.userData.isServeShot ? 75 : 50); } else pointsCPU++;
+  if(meshWinner===player1){ pointsYou++; if(gameMode!=='multi') addScore(ball.userData.isServeShot ? 75 : 50); } else pointsCPU++;
   SFX.point();
   if(pointsYou>=4 || pointsCPU>=4){
     if(Math.abs(pointsYou-pointsCPU)>=2){
-      if(pointsYou>pointsCPU){ gamesYou++; addScore(100); } else gamesCPU++;
+      if(pointsYou>pointsCPU){ gamesYou++; if(gameMode!=='multi') addScore(100); } else gamesCPU++;
       pointsYou=pointsCPU=0; SFX.game();
       cpuFlatLeft = cpuFlatPerGame(); cpuDropLeft = cpuDropPerGame(); cpuDropLeft = cpuDropPerGame();
       if(gamesYou>=GAMES_TO_WIN || gamesCPU>=GAMES_TO_WIN){
@@ -1377,17 +1545,36 @@ function awardPointTo(meshWinner){
   cpuMissArmed = (phase===8||phase===9||phase===10); resetForNextPoint(false);
 }
 
+
 function showPhaseEnd(youWin){
-// DEMO CTA (Phase 1): ensure the extra button does not persist between screens
-const _oldDemoCta = document.getElementById('demoCtaBtn');
-if(_oldDemoCta){ try{ _oldDemoCta.remove(); }catch(_){ _oldDemoCta.parentNode && _oldDemoCta.parentNode.removeChild(_oldDemoCta); } }
   const finalScore = playerScore; // capture before any reset
   lastFinal = { phase: phase, gamesYou: gamesYou, gamesCPU: gamesCPU, score: finalScore, youWin: !!youWin };
 
-  const upsell = document.getElementById('upsellText');
-  const demoLocked = (DEMO_MODE && phase >= DEMO_MAX_PHASE);
-  if(upsell){ upsell.style.display = demoLocked ? 'block' : 'none'; }
+  // ===== LOCAL MULTIPLAYER (no score submit) =====
+  if(gameMode === 'multi'){
+    finalTitle.textContent = youWin ? "P1 WINS" : "P2 WINS";
+    finalSubtitle.textContent = `P1 ${gamesYou}–${gamesCPU} P2`;
 
+    // Multiplayer has no Submit Score and no "game over" flow:
+    const submitWrap = document.getElementById('submitScoreWrap');
+    if(submitWrap) submitWrap.style.display = 'none';
+
+    // Offer: Next Level / Rematch (but on phase 7, only Rematch)
+    if(phase >= 7){
+      continueBtn.style.display = 'none';
+    }else{
+      continueBtn.style.display = 'inline-block';
+      continueBtn.textContent = "NEXT LEVEL";
+    }
+    restartBtn.style.display = 'inline-block';
+    restartBtn.textContent = "REMATCH";
+
+    finalEl.style.display = 'flex';
+    SFX.win();
+    return;
+  }
+
+// ===== SINGLE PLAYER (campaign) =====
   if(youWin){
     addScore(200); // win bonus
   }else{
@@ -1399,61 +1586,20 @@ if(_oldDemoCta){ try{ _oldDemoCta.remove(); }catch(_){ _oldDemoCta.parentNode &&
   if(youWin){
     finalTitle.textContent = "YOU WIN";
     finalSubtitle.textContent = `${gamesYou}–${gamesCPU}`;
-
     continueBtn.style.display = (phase < 10) ? 'inline-block' : 'none';
     continueBtn.textContent = "NEXT LEVEL";
-
     restartBtn.style.display = 'inline-block';
     restartBtn.textContent = "REPLAY LEVEL";
-
-// Demo CTA: show a simple "BUY FULL VERSION" button when you beat Phase 1
-if(phase === 1){
-  const demoCtaBtn = document.createElement('button');
-  demoCtaBtn.id = 'demoCtaBtn';
-  demoCtaBtn.className = 'alt';
-  demoCtaBtn.textContent = 'BUY FULL VERSION';
-  demoCtaBtn.addEventListener('click', (e)=>{
-    e.preventDefault();
-    window.open('https://robotennis.myshopify.com/', '_blank', 'noopener,noreferrer');
-  });
-  const btnRow = document.querySelector('#final .buttons');
-  if(btnRow) btnRow.appendChild(demoCtaBtn);
-}
   }else{
     finalTitle.textContent = "GAME OVER";
     finalSubtitle.textContent = `${gamesYou}–${gamesCPU} • SCORE: ${Number(finalScore||0).toLocaleString()}`;
-
     continueBtn.style.display = 'none';
-
     restartBtn.style.display = 'inline-block';
     restartBtn.textContent = "TRY AGAIN";
-
-// Demo CTA: show a simple "BUY FULL VERSION" button on Phase 1 (win or lose)
-if(phase === 1){
-  const demoCtaBtn = document.createElement('button');
-  demoCtaBtn.id = 'demoCtaBtn';
-  demoCtaBtn.className = 'alt';
-  demoCtaBtn.textContent = 'BUY FULL VERSION';
-  demoCtaBtn.addEventListener('click', (e)=>{
-    e.preventDefault();
-    openFullGame();
-  });
-  const btnRow = document.querySelector('#final .buttons');
-  if(btnRow) btnRow.appendChild(demoCtaBtn);
-}
-
-  }
-
-  // Demo upsell: lock after phase 2 (win or lose) and redirect to full game
-  if(demoLocked){
-    continueBtn.style.display = 'inline-block';
-    continueBtn.textContent = 'BUY FULL VERSION';
-    continueBtn.classList.add('alt');
-    continueBtn.onclick = ()=>{ openFullGame(); };
   }
 
   const submitWrap = document.getElementById('submitScoreWrap');
-  if(submitWrap){ submitWrap.style.display = youWin ? 'none' : 'block'; }
+  if(submitWrap) submitWrap.style.display = youWin ? 'none' : 'block';
 
   finalEl.style.display = 'flex';
   (youWin ? SFX.win : SFX.lose)();
@@ -1464,7 +1610,17 @@ if(phase === 1){
 }
 
 
-continueBtn.onclick = ()=>{ finalEl.style.display='none'; if(DEMO_MODE && phase>=DEMO_MAX_PHASE){ openFullGame(); return; } setPhase(phase+1); playPhaseMusic(phase); };
+
+continueBtn.onclick = ()=>{
+  finalEl.style.display='none';
+  if(gameMode === 'multi'){
+    // Multiplayer only supports phases 1–7
+    setPhase(Math.min(7, phase+1));
+  }else{
+    setPhase(phase+1);
+  }
+  playPhaseMusic(phase);
+};
 restartBtn.onclick  = ()=>{ finalEl.style.display='none'; setPhase(phase); playPhaseMusic(phase); };
 
 replayBtn && (replayBtn.onclick = ()=>{ grandFinal.style.display='none'; setPhase(1); playPhaseMusic(phase); });
@@ -1625,7 +1781,13 @@ let last=performance.now();
 function tick(now){
   if(paused){ requestAnimationFrame(tick); return; }
   const dt=Math.min(0.033,(now-last)/1000); last=now;
-  handlePlayer(dt); ((phase===8||phase===9||phase===10)?cpuThinkPhase8(dt):cpuThink(dt)); updateBall(dt);
+  handlePlayer(dt);
+  if(gameMode==='multi'){
+    handlePlayer2(dt);
+  }else{
+    ((phase===8||phase===9||phase===10)?cpuThinkPhase8(dt):cpuThink(dt));
+  }
+  updateBall(dt);
   // Trail sampling & fade
   if(rallying){ trailAcc += dt; if(trailAcc > 0.016){ addTrailSample(); trailAcc = 0; } }
   fadeTrail(dt);
@@ -1661,13 +1823,63 @@ function tick(now){
   }
 }
 
-  renderer.render(scene,camera);
+
+  if(gameMode === 'multi'){
+    // Split-screen: left = P1 behind baseline, right = P2 behind baseline
+    updateSplitCameraAspects();
+
+    // Camera behind P1 (bottom side)
+    cameraP1.up.set(0,1,0);
+    const p1Eye = new THREE.Vector3(player1.position.x, 4.6, player1.position.z - 6.6);
+    const p1Target = new THREE.Vector3(player1.position.x*0.6, 1.2, player1.position.z + 10.5);
+    cameraP1.position.lerp(p1Eye, 0.22);
+    cameraP1.lookAt(p1Target);
+
+    // Camera behind P2 (top side)
+    cameraP2.up.set(0,1,0);
+    const p2Eye = new THREE.Vector3(player2.position.x, 4.6, player2.position.z + 6.6);
+    const p2Target = new THREE.Vector3(player2.position.x*0.6, 1.2, player2.position.z - 10.5);
+    cameraP2.position.lerp(p2Eye, 0.22);
+    cameraP2.lookAt(p2Target);
+
+    const w = innerWidth, h = innerHeight, half = Math.floor(w*0.5);
+
+    renderer.setScissorTest(true);
+    renderer.clear(true,true,true);
+
+    // Left half (P1)
+    renderer.setViewport(0, 0, half, h);
+    renderer.setScissor(0, 0, half, h);
+    renderer.render(scene, cameraP1);
+    renderer.clearDepth();
+
+    // Right half (P2)
+    renderer.setViewport(half, 0, w-half, h);
+    renderer.setScissor(half, 0, w-half, h);
+    renderer.render(scene, cameraP2);
+
+    renderer.setScissorTest(false);
+  }else{
+    renderer.render(scene,camera);
+  }
+
   requestAnimationFrame(tick);
 }
 requestAnimationFrame(tick);
 
-addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
-function togglePause(){paused=!paused;document.getElementById('pause').style.display=paused?'flex':'none';}
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);updateSplitCameraAspects();});
+function togglePause(){
+  paused = !paused;
+  const pEl = document.getElementById('pause');
+  if(pEl) pEl.style.display = paused ? 'flex' : 'none';
+}
+// Expose pause control for ESC pause menu (keeps CPU/player inputs frozen)
+window.RT_setPaused = function(v){
+  paused = !!v;
+  const pEl = document.getElementById('pause');
+  if(pEl) pEl.style.display = 'none';
+};
+window.RT_isPaused = function(){ return !!paused; };
 
 // Confete simples
 function launchConfetti(){
@@ -1689,6 +1901,7 @@ function launchConfetti(){
 
 // START
 setPhase(1);
+applyGameModeUI();
 })(); 
 </script>
 
@@ -1720,19 +1933,79 @@ setPhase(1);
   .menuItem.selected{ color:#fff; }
   .menuHint{ margin-top:10px; opacity:.9; font-size:14px; }
 
+
+  /* ===== IN-GAME PAUSE MENU (ESC) ===== */
+  #pauseMenu{
+    position:fixed; inset:0; z-index:99998;
+    display:none; align-items:center; justify-content:center;
+    background: radial-gradient(1000px 600px at 50% 30%, rgba(10,14,22,0.68), rgba(6,8,13,0.88));
+    color:#fff; text-align:center; pointer-events:auto;
+  }
+  #pauseMenu .inner{ transform: translateY(-2vh); }
+  #pauseMenu .title{
+    font-family:'Bebas Neue', system-ui, -apple-system, Segoe UI, Roboto, Arial;
+    font-size:56px; letter-spacing:4px; margin:0 0 10px 0; opacity:.92;
+    text-shadow:0 6px 28px rgba(0,0,0,.6);
+  }
+  #pauseMenuList{ margin-top:10px; text-align:center; font-family:'Bebas Neue', system-ui, -apple-system, Segoe UI, Roboto, Arial; }
+  #pauseMenuList .menuItem{ font-size:44px; letter-spacing:3px; margin:14px 0; color:rgba(255,255,255,.45); user-select:none; }
+  #pauseMenuList .menuItem.selected{ color:#fff; }
+  #pauseMenu .menuHint{ margin-top:10px; opacity:.9; font-size:14px; font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial; }
+
+  #pauseControlsPanel{
+    display:none;
+    position:fixed;
+    left:50%;
+    top:50%;
+    transform:translate(-50%,-50%);
+    width:min(980px,94vw);
+    max-height:78vh;
+    overflow:auto;
+    -webkit-overflow-scrolling:touch;
+    text-align:left;
+    background:rgba(12,16,26,0.86);
+    border:1px solid rgba(255,255,255,0.18);
+    border-radius:18px;
+    padding:18px 22px 16px;
+    box-shadow:0 14px 40px rgba(0,0,0,.55);
+    z-index:99999;
+    color:#fff;
+  }
+  #pauseControlsPanel h2{ margin:0 0 10px; font:800 22px/1.1 system-ui,-apple-system,Segoe UI,Roboto; }
+  #pauseControlsPanel .sec{ margin:10px 0; }
+  #pauseControlsPanel .sec strong{ display:block; margin-bottom:6px; }
+  #pauseControlsPanel ul{ margin:6px 0 0 14px; padding:0; }
+  #pauseControlsPanel li{ margin:4px 0; }
+
 </style>
 <div id="mainMenu">
   <div class="inner">
     <h1><img src="logo-alta.png" alt="Robotênis" style="height:100px;"/></h1>
     <div id="menuList" aria-label="Main menu">
       <div class="menuItem selected" data-action="start">START GAME</div>
+      <div class="menuItem" data-action="multiplayer">MULTIPLAYER</div>
       <div class="menuItem" data-action="ranking">RANKING</div>
       <div class="menuItem" data-action="instructions">INSTRUCTIONS</div>
     </div>
-    <p class="menuHint">Use <kbd>↑</kbd>/<kbd>↓</kbd> and <kbd>ENTER</kbd></p>
-<div id="controlsPanel"><h2>🎮 RoboTennis Controls 🎾</h2><div class="sec"><strong>Player Movement</strong><ul><li><strong>WASD</strong> → move your machine</li></ul></div><div class="sec"><strong>Shots</strong><ul><li><strong>J</strong> → Topspin</li><li><strong>K</strong> → Slice</li><li><strong>L</strong> → Lob</li><li><strong>I</strong> → Flat</li><li><strong>O</strong> → Drop</li></ul></div><div class="sec"><strong>Camera</strong><ul><li><strong>Space</strong> → cycle cameras (aerial ↔ 1st person ↔ baseline ↔ top)</li></ul></div><div class="sec"><strong>Machine Types</strong><ul><li><strong>Blue</strong> → Topspin</li><li><strong>Green</strong> → Topspin and Slice</li><li><strong>Black</strong> → Topspin, Flat, Slice and Lob</li><li><strong>White</strong> → Topspin, Flat, Slice and Lob</li><li><strong>Purple</strong> → Topspin, Slice, Lob and Drop</li></ul></div><p style="margin-top:10px;opacity:.9"><em>Press <strong>ESC</strong> to close (or <strong>SHIFT</strong>)</em></p></div>
+    <div id="controlsPanel"><h2>🎮 RoboTennis Controls 🎾</h2><div class="sec"><strong>Player Movement</strong><ul><li><strong>WASD</strong> → move your machine</li></ul></div><div class="sec"><strong>Shots</strong><ul><li><strong>J</strong> → Topspin</li><li><strong>K</strong> → Slice</li><li><strong>L</strong> → Lob</li><li><strong>I</strong> → Flat</li><li><strong>O</strong> → Drop</li></ul></div><div class="sec"><strong>Camera</strong><ul><li><strong>Space</strong> → cycle cameras (aerial ↔ 1st person ↔ baseline ↔ top)</li></ul></div><div class="sec"><strong>Multiplayer (local)</strong><ul><li><strong>P2 movement</strong> → Arrow keys</li><li><strong>P2 shots</strong> → B (Top) • N (Slice) • M (Lob) • , (Flat) • . (Drop)</li></ul></div><div class="sec"><strong>Menu</strong><ul><li><strong>↑/↓</strong> → navigate</li><li><strong>Enter</strong> → select</li><li><strong>SHIFT</strong> → open/close this controls panel</li></ul></div><div class="sec"><strong>Gameplay</strong><ul><li><strong>ESC</strong> → pause menu / resume</li><li><strong>ESC</strong> → close controls panel</li></ul></div><p style="margin-top:10px;opacity:.9"><em>Press <strong>ESC</strong> to close (or <strong>SHIFT</strong>)</em></p></div>
   </div>
 </div>
+
+
+<div id="pauseMenu" aria-label="Pause menu">
+  <div class="inner">
+    <div class="title">PAUSED</div>
+    <div id="pauseMenuList">
+      <div class="menuItem selected" data-action="continue">CONTINUE</div>
+<div class="menuItem" data-action="multiplayer">MULTIPLAYER</div>
+      <div class="menuItem" data-action="ranking">RANKING</div>
+      <div class="menuItem" data-action="instructions">INSTRUCTIONS</div>
+    </div>
+    <div class="menuHint"><kbd>↑</kbd>/<kbd>↓</kbd> navigate • <kbd>Enter</kbd> select • <kbd>ESC</kbd> back</div>
+  </div>
+</div>
+
+<div id="pauseControlsPanel"></div>
 
 
 <script>
@@ -1793,11 +2066,21 @@ setPhase(1);
     const el = items[menuIndex];
     if(!el) return;
     const action = el.getAttribute('data-action') || '';
+
     if(action === 'start'){
+      try{ if(typeof window.RT_setGameMode==='function') window.RT_setGameMode('single'); }catch(_){ }
       try{ if(typeof window.RT_startMusic==='function') window.RT_startMusic(); }catch(_){ }
       hideMenu();
       return;
     }
+
+    if(action === 'multiplayer'){
+      try{ if(typeof window.RT_setGameMode==='function') window.RT_setGameMode('multi'); }catch(_){ }
+      try{ if(typeof window.RT_startMusic==='function') window.RT_startMusic(); }catch(_){ }
+      hideMenu();
+      return;
+    }
+
     if(action === 'instructions'){
       controlsOpen = true;
       setControlsVisible(true);
@@ -1840,6 +2123,163 @@ setPhase(1);
 
   // ensure initial highlight
   updateMenuSelection();
+
+})();
+</script>
+
+
+
+<script>
+(function(){
+  const pauseMenu = document.getElementById('pauseMenu');
+  const pauseList = document.getElementById('pauseMenuList');
+  const pauseControls = document.getElementById('pauseControlsPanel');
+
+  let pauseMenuVisible = false;
+  let pauseMenuIndex = 0;
+  let pauseControlsOpen = false;
+
+  function setPauseMenuVisible(v){
+    pauseMenuVisible = !!v;
+    if(!pauseMenu) return;
+    pauseMenu.style.display = pauseMenuVisible ? 'flex' : 'none';
+    // ensure old PAUSADO overlay doesn't cover
+    const p = document.getElementById('pause');
+    if(p) p.style.display = 'none';
+  }
+
+  function openPauseMenu(){
+    // Don't open if match overlays are up or main menu visible
+    const mainMenu = document.getElementById('mainMenu');
+    if(mainMenu && mainMenu.style.display !== 'none' && mainMenu.style.visibility !== 'hidden') return;
+
+    // close instructions panel if open
+    if(pauseControlsOpen){
+      pauseControlsOpen = false;
+      if(pauseControls) pauseControls.style.display='none';
+    }
+    pauseMenuIndex = 0;
+    updatePauseSelection();
+    setPauseMenuVisible(true);
+
+    // pause gameplay
+    try{ if(typeof window.RT_setPaused==='function') window.RT_setPaused(true); }catch(_){ }
+  }
+
+  function closePauseMenu(){
+    setPauseMenuVisible(false);
+    // resume gameplay
+    try{ if(typeof window.RT_setPaused==='function') window.RT_setPaused(false); }catch(_){ }
+  }
+
+  function updatePauseSelection(){
+    const items = document.querySelectorAll('#pauseMenuList .menuItem');
+    items.forEach((el,i)=>el.classList.toggle('selected', i===pauseMenuIndex));
+  }
+
+  function ensurePauseControlsContent(){
+    if(!pauseControls) return;
+    if(pauseControls.dataset.built === '1') return;
+
+    // Reuse the same controls markup from the main menu panel
+    const src = document.getElementById('controlsPanel');
+    if(src){
+      pauseControls.innerHTML = src.innerHTML;
+    }else{
+      // fallback (shouldn't happen)
+      pauseControls.innerHTML = '<h2>🎮 RoboTennis Controls 🎾</h2><p>Controls panel unavailable.</p>';
+    }
+
+    // Replace the last hint to be ESC-focused
+    pauseControls.insertAdjacentHTML('beforeend','<p style="margin-top:10px;opacity:.9"><em>Press <strong>ESC</strong> to close</em></p>');
+    pauseControls.dataset.built = '1';
+  }
+
+  function openPauseControls(){
+    ensurePauseControlsContent();
+    pauseControlsOpen = true;
+    if(pauseControls) pauseControls.style.display = 'block';
+  }
+  function closePauseControls(){
+    pauseControlsOpen = false;
+    if(pauseControls) pauseControls.style.display = 'none';
+  }
+
+  function runPauseAction(){
+    const items = document.querySelectorAll('#pauseMenuList .menuItem');
+    const el = items[pauseMenuIndex];
+    if(!el) return;
+    const action = el.getAttribute('data-action') || '';
+
+    if(action === 'continue'){
+      closePauseMenu();
+      return;
+    }
+    if(action === 'multiplayer'){
+      closePauseMenu();
+      try{ if(typeof window.RT_setGameMode==='function') window.RT_setGameMode('multi'); }catch(_){}
+      try{ if(typeof window.RT_startMusic==='function') window.RT_startMusic(); }catch(_){}
+      return;
+    }
+    if(action === 'ranking'){
+      window.open('https://robotennis.myshopify.com/pages/ranking', '_blank', 'noopener,noreferrer');
+      return;
+    }
+    if(action === 'instructions'){
+      openPauseControls();
+      return;
+    }
+  }
+
+  // Key handling (capture)
+  window.addEventListener('keydown', function(e){
+    const code = e.code || e.key || '';
+
+    // If pause controls open: ESC closes it
+    if(pauseControlsOpen && (code === 'Escape' || e.key === 'Escape')){
+      closePauseControls();
+      e.preventDefault(); e.stopPropagation();
+      return;
+    }
+
+    // Toggle pause menu with ESC (only when main menu is hidden)
+    const mainMenuEl = document.getElementById('mainMenu');
+    if(mainMenuEl && mainMenuEl.style.display !== 'none' && mainMenuEl.style.visibility !== 'hidden'){
+      return; // let main menu handle ESC
+    }
+    if((code === 'Escape' || e.key === 'Escape')){
+
+      if(pauseMenuVisible){
+        closePauseMenu();
+      }else{
+        openPauseMenu();
+      }
+      e.preventDefault(); e.stopPropagation();
+      return;
+    }
+
+    if(!pauseMenuVisible) return;
+
+    if(code === 'ArrowDown' || e.key === 'ArrowDown'){
+      const n = document.querySelectorAll('#pauseMenuList .menuItem').length;
+      pauseMenuIndex = (pauseMenuIndex + 1) % n;
+      updatePauseSelection();
+      e.preventDefault(); e.stopPropagation();
+      return;
+    }
+    if(code === 'ArrowUp' || e.key === 'ArrowUp'){
+      const n = document.querySelectorAll('#pauseMenuList .menuItem').length;
+      pauseMenuIndex = (pauseMenuIndex - 1 + n) % n;
+      updatePauseSelection();
+      e.preventDefault(); e.stopPropagation();
+      return;
+    }
+    if(code === 'Enter' || e.key === 'Enter' || e.keyCode === 13){
+      runPauseAction();
+      e.preventDefault(); e.stopPropagation();
+      return;
+    }
+  }, true);
 
 })();
 </script>
